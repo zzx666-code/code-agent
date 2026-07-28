@@ -14,9 +14,10 @@ import (
 type CommandType string
 
 const (
-	TypeLocal   CommandType = "local"
-	TypeLocalUI CommandType = "local-ui"
-	TypePrompt  CommandType = "prompt"
+	TypeLocal      CommandType = "local"
+	TypeLocalUI    CommandType = "local-ui"
+	TypePrompt     CommandType = "prompt"
+	TypeLocalAsync CommandType = "local-async"
 	// TypeSkillFork is for skills declared with `mode: fork`. The handler
 	// runs the skill in an isolated sub-agent (no main-loop touch) and
 	// returns the final assistant text; the TUI dispatcher inserts that
@@ -37,6 +38,11 @@ type Context struct {
 	SkillList       func() []SkillInfo
 	SkillReload     func() int // reload catalog + prompt, returns new skill count
 	MCPInfo         func() string
+	RAGIndex        func(path string) string
+	RAGStatus       func() string
+	RAGClear        func() string
+	RAGSearch       func(query string, topK int) string
+	RAGIndexAsync   func(path string, progress func(msg string)) string
 	WorkDir         string
 	Model           string
 }
@@ -398,6 +404,58 @@ func CreateDefaultRegistry() *Registry {
 		},
 	})
 
+	r.Register(&Command{
+		Name:        "rag",
+		Description: "RAG index management: /rag <path> | /rag clear | /rag status",
+		Type:        TypeLocalAsync,
+		Handler: func(ctx *Context) string {
+			args := strings.TrimSpace(ctx.Args)
+			switch {
+			case args == "clear":
+				if ctx.RAGClear == nil {
+					return "RAG not available."
+				}
+				return ctx.RAGClear()
+			case args == "status":
+				if ctx.RAGStatus == nil {
+					return "RAG not available."
+				}
+				return ctx.RAGStatus()
+			case args == "":
+				return "Usage: /rag <path> | /rag clear | /rag status"
+			default:
+				path := trimQuotes(args)
+				if ctx.RAGIndexAsync == nil {
+					if ctx.RAGIndex != nil {
+						return ctx.RAGIndex(path)
+					}
+					return "RAG not available (embedding_model not configured)."
+				}
+				return ctx.RAGIndexAsync(path, nil)
+			}
+		},
+	})
+
+	r.Register(&Command{
+		Name:        "ask",
+		Description: "Semantic search via RAG: /ask <query>",
+		Type:        TypePrompt,
+		Handler: func(ctx *Context) string {
+			query := strings.TrimSpace(ctx.Args)
+			if query == "" {
+				return "Usage: /ask <query>"
+			}
+			if ctx.RAGSearch == nil {
+				return "RAG not available (embedding_model not configured). Use /rag <path> to index first."
+			}
+			results := ctx.RAGSearch(query, 5)
+			return "用户问题：" + query + "\n\n" +
+				"以下是 RAG 检索到的相关代码片段（共 5 条）。请基于这些片段回答用户问题，" +
+				"引用格式 file_path:start_line-end_line。若检索结果不足以回答，请明确告知并建议用 grep 补充搜索。\n\n" +
+				results
+		},
+	})
+
 	return r
 }
 
@@ -412,4 +470,14 @@ func parseSubcommand(args string) (sub string, rest string) {
 		rest = strings.TrimSpace(parts[1])
 	}
 	return
+}
+
+func trimQuotes(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
 }

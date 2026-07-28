@@ -67,10 +67,29 @@ Usage notes:
 const GrepDescription = `Search file contents using a regex pattern, returning file:line:content matches.
 
 Usage notes:
-- Supports full regex syntax (e.g., "log.*Error", "func\s+\w+").
-- Filter files with the include parameter (e.g., "*.py", "*.go").
+- Supports full regex syntax (e.g. "log.*Error", "func\s+\w+").
+- Filter files by the include parameter (e.g. "*.py", "*.go").
 - Search from "." or a specific path, never from "/".
 - Use this instead of grep or rg commands via Bash.
 - Automatically skips .git, node_modules, __pycache__, and similar directories.`
+
+const RagIndexDescription = `Index a file or directory into the RAG vector store for semantic search.
+
+Usage notes:
+- Pass a file or directory path (relative to cwd or absolute).
+- Directories are scanned recursively; .git/node_modules/vendor etc. are skipped.
+- Files are chunked (by sliding window for code, by paragraph for docs) and embedded.
+- Requires embedding_model to be configured in .mewcode/config.yaml.
+- Re-indexing the same path replaces all previous entries (full rebuild).`
+
+const RagSearchDescription = `Semantic search over indexed chunks using vector similarity.
+
+Usage notes:
+- Query in natural language; returns top_k (default 5) most similar chunks.
+- Each result includes file_path, line range, content, and similarity score.
+- Use this when grep/glob cannot find what you need (semantic rather than exact match).
+- Requires the target files to have been indexed via RagIndex first.`
+
+const RagClearDescription = `Clear the RAG vector store, removing all indexed chunks and metadata.`
 
 

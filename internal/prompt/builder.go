@@ -101,6 +101,7 @@ func BuildSystemPrompt(env EnvironmentContext, opts BuildOptions) string {
 	b.Add(ToneStyleSection())
 	b.Add(OutputEfficiencySection())
 	b.Add(EnvironmentSection(env))
+	b.Add(RAGSection())
 
 	// 自定义指令（优先级 80，高于环境信息但低于 Skills）
 	if opts.CustomInstructions != "" {

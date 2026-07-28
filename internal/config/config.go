@@ -45,6 +45,9 @@ type ProviderConfig struct {
 	Thinking        bool   `yaml:"thinking"`
 	ContextWindow   int    `yaml:"context_window"`
 	MaxOutputTokens int    `yaml:"max_output_tokens"`
+	EmbeddingModel  string `yaml:"embedding_model"`
+	EmbeddingURL    string `yaml:"embedding_url"`
+	EmbeddingAPIKey string `yaml:"embedding_api_key"`
 
 	// fetchedContextWindow caches the max_input_tokens auto-pulled from the
 	// provider's /v1/models endpoint (layer 2 of GetContextWindow). Populated
@@ -130,6 +133,22 @@ func (p *ProviderConfig) GetMaxOutputTokens() int {
 }
 
 func (p *ProviderConfig) ResolveAPIKey() string {
+	if p.APIKey != "" {
+		return p.APIKey
+	}
+	envVar := envKeyMap[p.Protocol]
+	if envVar == "" {
+		return ""
+	}
+	return os.Getenv(envVar)
+}
+
+// ResolveEmbeddingAPIKey returns the API key for embedding calls.
+// Priority: embedding_api_key > api_key (shared) > OPENAI_API_KEY env var.
+func (p *ProviderConfig) ResolveEmbeddingAPIKey() string {
+	if p.EmbeddingAPIKey != "" {
+		return p.EmbeddingAPIKey
+	}
 	if p.APIKey != "" {
 		return p.APIKey
 	}

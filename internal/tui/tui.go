@@ -32,6 +32,7 @@ import (
 	"mewcode/internal/permissions"
 	"mewcode/internal/planfile"
 	"mewcode/internal/prompt"
+	"mewcode/internal/rag"
 	"mewcode/internal/sandbox"
 	"mewcode/internal/session"
 	"mewcode/internal/skills"
@@ -101,6 +102,15 @@ type mcpReadyMsg struct{ result mcp.ConnectResult }
 type compactDoneMsg struct {
 	message string
 	err     error
+}
+
+type ragIndexProgressMsg struct {
+	message string
+	ch      chan string
+}
+type ragIndexDoneMsg struct {
+	result string
+	err    error
 }
 
 // forkSkillDoneMsg is dispatched when a fork-mode Skill's sub-agent has
@@ -219,6 +229,8 @@ type Model struct {
 	memoryExtractor     *extractor.Extractor
 	memoryConsolidator  *consolidation.Consolidator
 	teamMgr         *teams.TeamManager
+	ragStore        *rag.Store
+	ragEmbedder     *rag.Embedder
 
 	sandboxDialog         bool                 // 沙箱模式选择对话框是否打开
 	sandboxCursor         int                  // 当前选中的沙箱模式索引
@@ -509,6 +521,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateViewport()
 		return m, nil
 
+	case ragIndexProgressMsg:
+		if len(m.chatMessages) > 0 && m.chatMessages[len(m.chatMessages)-1].role == "system" &&
+			strings.HasPrefix(m.chatMessages[len(m.chatMessages)-1].content, "正在执行") {
+			m.chatMessages[len(m.chatMessages)-1].content = msg.message
+		} else if len(m.chatMessages) > 0 && m.chatMessages[len(m.chatMessages)-1].role == "system" &&
+			!strings.HasPrefix(m.chatMessages[len(m.chatMessages)-1].content, "已索引") {
+			m.chatMessages[len(m.chatMessages)-1].content = msg.message
+		} else {
+			m.chatMessages = append(m.chatMessages, chatMessage{role: "system", content: msg.message})
+		}
+		m.updateViewport()
+		if msg.ch != nil {
+			return m, pollRAGProgress(msg.ch)
+		}
+		return m, nil
+
+	case ragIndexDoneMsg:
+		var content string
+		if msg.err != nil {
+			content = "索引失败：" + msg.err.Error()
+		} else {
+			content = msg.result
+		}
+		if strings.HasPrefix(content, "索引失败") || strings.HasPrefix(content, "Error") {
+			m.chatMessages = append(m.chatMessages, chatMessage{role: "error", content: content})
+		} else {
+			m.chatMessages = append(m.chatMessages, chatMessage{role: "system", content: content})
+		}
+		m.updateViewport()
+		return m, nil
+
 	case mcpReadyMsg:
 		m.mcpConnecting = false
 		m.mcpMgr = msg.result.Mgr
@@ -691,6 +734,15 @@ func (m *Model) registerAgentTools(client llm.Client, providerCfg *config.Provid
 	m.todoList = todo.NewTaskList(store)
 
 	m.memoryMgr = memory.NewManager(wd)
+
+	ragStore, ragEmbedder, ragErr := tools.NewRAGStore(wd, providerCfg)
+	if ragErr == nil {
+		m.ragStore = ragStore
+		m.ragEmbedder = ragEmbedder
+		m.registry.Register(&tools.RagIndexTool{Store: ragStore, Embedder: ragEmbedder})
+		m.registry.Register(&tools.RagSearchTool{Store: ragStore, Embedder: ragEmbedder})
+		m.registry.Register(&tools.RagClearTool{Store: ragStore})
+	}
 
 	loader := agents.NewAgentLoader(wd)
 	loader.LoadAll()
@@ -1743,6 +1795,62 @@ func (m Model) buildCommandContext(args string) *commands.Context {
 		MCPInfo: func() string {
 			return m.mcpServerInfo
 		},
+		RAGIndex: func(path string) string {
+			if m.ragStore == nil || m.ragEmbedder == nil {
+				return "RAG 未初始化：请在 .mewcode/config.yaml 中配置 embedding_model"
+			}
+			tool := &tools.RagIndexTool{Store: m.ragStore, Embedder: m.ragEmbedder}
+			res := tool.Execute(context.Background(), map[string]any{"path": path})
+			if res.IsError {
+				return "索引失败：" + res.Output
+			}
+			return res.Output
+		},
+		RAGIndexAsync: func(path string, progress func(msg string)) string {
+			if m.ragStore == nil || m.ragEmbedder == nil {
+				return "RAG 未初始化：请在 .mewcode/config.yaml 中配置 embedding_model"
+			}
+			tool := &tools.RagIndexTool{Store: m.ragStore, Embedder: m.ragEmbedder}
+			res := tool.ExecuteWithProgress(context.Background(), map[string]any{"path": path}, progress)
+			if res.IsError {
+				return "索引失败：" + res.Output
+			}
+			return res.Output
+		},
+		RAGStatus: func() string {
+			if m.ragStore == nil {
+				return "RAG 未初始化（未配置 embedding_model）"
+			}
+			stats, err := m.ragStore.Stats()
+			if err != nil {
+				return "获取状态失败：" + err.Error()
+			}
+			if stats.ChunkCount == 0 {
+				return "索引库为空。使用 /rag <path> 索引文件或目录。"
+			}
+			return fmt.Sprintf("RAG 索引状态\n──────────────\n  Chunks:  %d\n  Files:   %d\n  Model:   %s\n  Dim:     %d\n  Size:    %d KB",
+				stats.ChunkCount, stats.FileCount, stats.Model, stats.Dim, stats.DBSize/1024)
+		},
+		RAGClear: func() string {
+			if m.ragStore == nil {
+				return "RAG 未初始化"
+			}
+			if err := m.ragStore.Clear(); err != nil {
+				return "清空失败：" + err.Error()
+			}
+			return "索引已清空"
+		},
+		RAGSearch: func(query string, topK int) string {
+			if m.ragStore == nil || m.ragEmbedder == nil {
+				return "RAG 未初始化：请在 .mewcode/config.yaml 中配置 embedding_model"
+			}
+			tool := &tools.RagSearchTool{Store: m.ragStore, Embedder: m.ragEmbedder}
+			res := tool.Execute(context.Background(), map[string]any{"query": query, "top_k": topK})
+			if res.IsError {
+				return "检索失败：" + res.Output
+			}
+			return res.Output
+		},
 	}
 }
 
@@ -1925,6 +2033,46 @@ func (m Model) executeCommand(name, args string) (tea.Model, tea.Cmd) {
 			},
 		)
 
+	case commands.TypeLocalAsync:
+		if cmd.Handler == nil {
+			break
+		}
+		displayText := "/" + name
+		if args != "" {
+			displayText += " " + args
+		}
+		m.chatMessages = append(m.chatMessages, chatMessage{role: "user", content: displayText})
+		userLine := promptStyle.Render("❯ ") + lipgloss.NewStyle().Foreground(brightText).Bold(true).Render(displayText)
+		notice := fmt.Sprintf("正在执行 /%s ...", name)
+		m.chatMessages = append(m.chatMessages, chatMessage{role: "system", content: notice})
+		m.committedUpTo = len(m.chatMessages)
+		m.updateViewport()
+		commitText := userLine + "\n" + lipgloss.NewStyle().Foreground(dimText).Render(notice)
+
+		progressCh := make(chan string, 16)
+		asyncCtx := m.buildCommandContext(args)
+		if asyncCtx.RAGIndexAsync != nil {
+			origFn := asyncCtx.RAGIndexAsync
+			asyncCtx.RAGIndexAsync = func(path string, _ func(string)) string {
+				return origFn(path, func(msg string) {
+					select {
+					case progressCh <- msg:
+					default:
+					}
+				})
+			}
+		}
+
+		return m, tea.Batch(
+			tea.Println(commitText),
+			func() tea.Msg {
+				result := cmd.Handler(asyncCtx)
+				close(progressCh)
+				return ragIndexDoneMsg{result: result}
+			},
+			pollRAGProgress(progressCh),
+		)
+
 	case commands.TypeLocal:
 		if cmd.Handler != nil {
 			output := cmd.Handler(ctx)
@@ -1936,10 +2084,20 @@ func (m Model) executeCommand(name, args string) (tea.Model, tea.Cmd) {
 
 	m.chatMessages = append(m.chatMessages, chatMessage{
 		role:    "system",
-		content: fmt.Sprintf("/%s — not yet implemented", name),
+		content: fmt.Sprintf("/%s - not yet implemented", name),
 	})
 	m.updateViewport()
 	return m, nil
+}
+
+func pollRAGProgress(ch chan string) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return ragIndexProgressMsg{message: msg, ch: ch}
+	}
 }
 
 var permOptions = []struct {

@@ -227,3 +227,29 @@ func joinLines(lines []string) string {
 	}
 	return result
 }
+
+func RAGSection() Section {
+	return Section{
+		Name:     "RAG",
+		Priority: 75,
+		Content: `# RAG 语义检索
+
+本 agent 内置 RAG 工具，用于基于向量相似度检索已索引的代码/文档内容。
+
+## 工具
+
+- RagIndex(path, recursive?) - 索引文件或目录，工具内部按语言切分 chunk 并 embed 入库
+- RagSearch(query, top_k?=5) - 语义检索，返回 file_path:行号范围 + 内容 + 相似度分数
+- RagClear() - 清空索引库
+
+## 使用规则
+
+1. 用户通过 /rag <path> 命令索引，通过 /ask <query> 命令查询，两者均为显式触发
+2. /ask 会自动调用 RagSearch 取回 top5 结果，你需基于检索结果组织回答
+3. 引用检索内容时用 file_path:start_line-end_line 格式
+4. 若检索结果不足以完整回答，明确告知用户并建议用 grep 补充搜索或扩大索引范围
+5. RAG 工具失败时静默回退到 grep/read，不要向用户报错中断对话
+6. 不要把整个文件塞进上下文，只返回检索到的 chunk
+7. 索引持久化在 .mewcode/rag/rag.db，重启保留，除非用户执行 /rag clear`,
+	}
+}
