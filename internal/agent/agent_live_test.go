@@ -137,6 +137,9 @@ func truncateArgs(args map[string]any) string {
 }
 
 func TestLiveFrontendDesignSkill(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping live test in short mode")
+	}
 	providerCfg := loadRealConfig(t)
 	catalog, skillsDir := loadRealSkills(t)
 
@@ -216,12 +219,12 @@ func TestLiveFrontendDesignSkill(t *testing.T) {
 
 	// Content quality checks
 	checks := map[string]string{
-		"<html":     "valid HTML",
-		"<form":     "has a form",
-		"email":     "has email field",
-		"password":  "has password field",
-		"<button":   "has submit button",
-		"<style":    "has CSS styling",
+		"<html":    "valid HTML",
+		"<form":    "has a form",
+		"email":    "has email field",
+		"password": "has password field",
+		"<button":  "has submit button",
+		"<style":   "has CSS styling",
 	}
 	passed := 0
 	for substr, desc := range checks {
@@ -258,6 +261,9 @@ func TestLiveFrontendDesignSkill(t *testing.T) {
 }
 
 func TestLiveSkillCreatorOutputPath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping live test in short mode")
+	}
 	providerCfg := loadRealConfig(t)
 	catalog, _ := loadRealSkills(t)
 
@@ -347,6 +353,9 @@ func TestLiveSkillCreatorOutputPath(t *testing.T) {
 }
 
 func TestLiveSimpleChat(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping live test in short mode")
+	}
 	providerCfg := loadRealConfig(t)
 
 	env := prompt.DetectEnvironment(".")
