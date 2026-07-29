@@ -3,6 +3,7 @@ package rag
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -40,7 +41,7 @@ func (e *Embedder) Embed(ctx context.Context, texts []string) ([][]float32, int,
 	if len(texts) == 0 {
 		return nil, 0, nil
 	}
-	const batchSize = 64
+	const batchSize = 10
 	var all [][]float32
 	var dim int
 	for start := 0; start < len(texts); start += batchSize {
@@ -49,12 +50,29 @@ func (e *Embedder) Embed(ctx context.Context, texts []string) ([][]float32, int,
 			end = len(texts)
 		}
 		batch := texts[start:end]
-		resp, err := e.client.Embeddings.New(ctx, openai.EmbeddingNewParams{
-			Model: openai.EmbeddingModel(e.model),
-			Input: openai.EmbeddingNewParamsInputUnion{
-				OfArrayOfStrings: batch,
-			},
-		})
+
+		var resp *openai.CreateEmbeddingResponse
+		var err error
+		for attempt := 0; attempt < 3; attempt++ {
+			resp, err = e.client.Embeddings.New(ctx, openai.EmbeddingNewParams{
+				Model: openai.EmbeddingModel(e.model),
+				Input: openai.EmbeddingNewParamsInputUnion{
+					OfArrayOfStrings: batch,
+				},
+			})
+			if err == nil {
+				break
+			}
+			// 429 限流时退避重试
+			if attempt < 2 {
+				backoff := time.Duration(1500*(attempt+1)) * time.Millisecond
+				select {
+				case <-ctx.Done():
+					return nil, 0, ctx.Err()
+				case <-time.After(backoff):
+				}
+			}
+		}
 		if err != nil {
 			return nil, 0, fmt.Errorf("embedding API call failed: %w", err)
 		}
@@ -67,6 +85,14 @@ func (e *Embedder) Embed(ctx context.Context, texts []string) ([][]float32, int,
 				dim = len(vec)
 			}
 			all = append(all, vec)
+		}
+		// 批次间限速，避免触发 API 限流
+		if end < len(texts) {
+			select {
+			case <-ctx.Done():
+				return nil, 0, ctx.Err()
+			case <-time.After(800 * time.Millisecond):
+			}
 		}
 	}
 	return all, dim, nil

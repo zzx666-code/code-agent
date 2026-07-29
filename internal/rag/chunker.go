@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	pdf "github.com/ledongthuc/pdf"
 )
 
 const (
@@ -28,7 +30,7 @@ var skipExts = map[string]bool{
 	".ico": true, ".webp": true, ".svg": true,
 	".mp3": true, ".mp4": true, ".avi": true, ".mov": true,
 	".zip": true, ".gz": true, ".tar": true, ".rar": true, ".7z": true,
-	".pdf": true, ".doc": true, ".xls": true, ".xlsx": true,
+	".doc": true, ".xls": true, ".xlsx": true,
 	".exe": true, ".dll": true, ".so": true, ".dylib": true, ".o": true,
 	".a": true, ".class": true, ".jar": true, ".pyc": true,
 	".db": true, ".sqlite": true, ".lock": true, ".sum": true,
@@ -147,6 +149,8 @@ func detectLanguage(path string) (lang, chunkType string) {
 		return "text", "doc"
 	case ".docx":
 		return "docx", "doc"
+	case ".pdf":
+		return "pdf", "doc"
 	default:
 		return "text", "text"
 	}
@@ -157,9 +161,15 @@ func chunkFile(path string) ([]FileChunk, error) {
 	if ext == ".docx" {
 		return chunkDocxFile(path)
 	}
+	if ext == ".pdf" {
+		return chunkPdfFile(path)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
+	}
+	if isBinaryContent(data) {
+		return nil, nil
 	}
 	content := string(data)
 	if strings.TrimSpace(content) == "" {
@@ -171,6 +181,28 @@ func chunkFile(path string) ([]FileChunk, error) {
 		return chunkByParagraph(path, lines, lang, chunkType), nil
 	}
 	return chunkBySlidingWindow(path, lines, lang, chunkType), nil
+}
+
+// isBinaryContent heuristically detects binary files by checking for NUL bytes
+// or a high ratio of non-printable/non-UTF8 bytes in the first 4KB.
+func isBinaryContent(data []byte) bool {
+	sample := data
+	if len(sample) > 4096 {
+		sample = sample[:4096]
+	}
+	if len(sample) == 0 {
+		return false
+	}
+	nonPrintable := 0
+	for _, b := range sample {
+		if b == 0 {
+			return true
+		}
+		if b < 0x09 || (b > 0x0d && b < 0x20) {
+			nonPrintable++
+		}
+	}
+	return float64(nonPrintable)/float64(len(sample)) > 0.30
 }
 
 func chunkBySlidingWindow(path string, lines []string, lang, chunkType string) []FileChunk {
@@ -266,6 +298,43 @@ func chunkDocxFile(path string) ([]FileChunk, error) {
 	}
 	lines := strings.Split(text, "\n")
 	return chunkByParagraph(path, lines, "docx", "doc"), nil
+}
+
+func chunkPdfFile(path string) ([]FileChunk, error) {
+	text, err := extractPdfText(path)
+	if err != nil {
+		return nil, fmt.Errorf("read pdf: %w", err)
+	}
+	if strings.TrimSpace(text) == "" {
+		return nil, nil
+	}
+	lines := strings.Split(text, "\n")
+	return chunkByParagraph(path, lines, "pdf", "doc"), nil
+}
+
+func extractPdfText(path string) (string, error) {
+	f, r, err := pdf.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	var sb strings.Builder
+	totalPages := r.NumPage()
+	for i := 1; i <= totalPages; i++ {
+		page := r.Page(i)
+		if page.V.IsNull() {
+			continue
+		}
+		text, err := page.GetPlainText(nil)
+		if err != nil {
+			continue
+		}
+		sb.WriteString(text)
+		if i < totalPages {
+			sb.WriteString("\n\n")
+		}
+	}
+	return sb.String(), nil
 }
 
 func extractDocxText(path string) (string, error) {
