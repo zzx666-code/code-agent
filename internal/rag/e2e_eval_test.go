@@ -300,6 +300,183 @@ func (l *LRUCache) Get(key string) (string, bool) {
 	l.moveToFront(node)
 	return node.val, true
 }`},
+
+		// 主题: config (新增)
+		{path: "config/loader.go", topic: "config", content: `package config
+
+import (
+	"os"
+	"gopkg.in/yaml.v3"
+)
+
+type Config struct {
+	Port     int    ` + "`yaml:\"port\"`" + `
+	Database string ` + "`yaml:\"database\"`" + `
+	Debug    bool   ` + "`yaml:\"debug\"`" + `
+}
+
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}`},
+		{path: "config/env.go", topic: "config", content: `package config
+
+import "os"
+
+func FromEnv() *Config {
+	return &Config{
+		Port:     atoi(os.Getenv("APP_PORT")),
+		Database: os.Getenv("DATABASE_URL"),
+		Debug:    os.Getenv("DEBUG") == "true",
+	}
+}
+
+func atoi(s string) int {
+	n := 0
+	for _, c := range s {
+		n = n*10 + int(c-'0')
+	}
+	return n
+}`},
+		{path: "config/validate.go", topic: "config", content: `package config
+
+import "fmt"
+
+func Validate(cfg *Config) error {
+	if cfg.Port < 1 || cfg.Port > 65535 {
+		return fmt.Errorf("invalid port: %d", cfg.Port)
+	}
+	if cfg.Database == "" {
+		return fmt.Errorf("database URL is required")
+	}
+	return nil
+}`},
+
+		// 主题: errors (新增)
+		{path: "errors/types.go", topic: "errors", content: `package errors
+
+type AppError struct {
+	Code    int
+	Message string
+	Cause   error
+}
+
+func (e *AppError) Error() string {
+	return e.Message
+}
+
+func (e *AppError) Unwrap() error {
+	return e.Cause
+}
+
+func New(code int, msg string) *AppError {
+	return &AppError{Code: code, Message: msg}
+}`},
+		{path: "errors/wrap.go", topic: "errors", content: `package errors
+
+import "fmt"
+
+func Wrap(err error, msg string) *AppError {
+	return &AppError{
+		Code:    500,
+		Message: fmt.Sprintf("%s: %v", msg, err),
+		Cause:   err,
+	}
+}
+
+func IsNotFound(err error) bool {
+	if ae, ok := err.(*AppError); ok {
+		return ae.Code == 404
+	}
+	return false
+}`},
+		{path: "errors/recover.go", topic: "errors", content: `package errors
+
+import "log"
+
+func Recover() {
+	if r := recover(); r != nil {
+		log.Printf("panic recovered: %v", r)
+	}
+}
+
+func Safe(fn func() error) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = New(500, "internal panic")
+		}
+	}()
+	return fn()
+}`},
+
+		// 主题: testing (新增)
+		{path: "testing/mock.go", topic: "testing", content: `package testing
+
+type MockDB struct {
+	queries []string
+	results map[string]interface{}
+}
+
+func NewMockDB() *MockDB {
+	return &MockDB{
+		results: make(map[string]interface{}),
+	}
+}
+
+func (m *MockDB) Query(q string) interface{} {
+	m.queries = append(m.queries, q)
+	return m.results[q]
+}
+
+func (m *MockDB) Expect(q string, r interface{}) {
+	m.results[q] = r
+}`},
+		{path: "testing/assert.go", topic: "testing", content: `package testing
+
+import "fmt"
+
+func AssertEqual(got, want interface{}) error {
+	if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", want) {
+		return fmt.Errorf("got %v, want %v", got, want)
+	}
+	return nil
+}
+
+func AssertNoError(err error) error {
+	if err != nil {
+		return fmt.Errorf("unexpected error: %v", err)
+	}
+	return nil
+}`},
+		{path: "testing/fixture.go", topic: "testing", content: `package testing
+
+import "os"
+
+type TempDir struct {
+	Path string
+}
+
+func NewTempDir() *TempDir {
+	dir, _ := os.MkdirTemp("", "test")
+	return &TempDir{Path: dir}
+}
+
+func (t *TempDir) Cleanup() {
+	os.RemoveAll(t.Path)
+}
+
+func (t *TempDir) WriteFile(name, content string) string {
+	p := t.Path + "/" + name
+	os.WriteFile(p, []byte(content), 0644)
+	return p
+}`},
 	}
 }
 
@@ -312,21 +489,77 @@ type evalQuery struct {
 
 func buildEvalQueries() []evalQuery {
 	return []evalQuery{
+		// ===== auth 主题 (7 条) =====
+		// 简单直白
 		{"用户登录认证怎么做", "auth"},
 		{"password 验证和 token 生成", "auth"},
 		{"JWT 编码", "auth"},
 		{"session 过期检查", "auth"},
+		// 模糊描述
+		{"怎么让用户登进来", "auth"},
+		{"密码不对怎么拒绝", "auth"},
+		// 跨主题术语
+		{"token 存在内存里还是缓存里", "auth"}, // auth vs cache 竞争
+
+		// ===== database 主题 (6 条) =====
 		{"数据库连接", "database"},
 		{"查询用户列表", "database"},
 		{"SQL 建表迁移", "database"},
+		// 模糊
+		{"怎么连上 postgres", "database"},
+		{"批量查出所有用户", "database"},
+		// 术语不匹配
+		{"ORM 怎么用", "database"}, // 期望 database 但代码里没 ORM，考验语义
+
+		// ===== logging 主题 (4 条) =====
 		{"日志记录器", "logging"},
 		{"日志文件轮转", "logging"},
+		// 模糊
+		{"程序跑的时候怎么打印信息", "logging"},
+		// 术语不匹配
+		{"log4j 级别配置", "logging"}, // 期望 logging 但用的是 log4j 术语
+
+		// ===== network 主题 (4 条) =====
 		{"HTTP 客户端请求", "network"},
 		{"WebSocket 收发消息", "network"},
+		// 模糊
+		{"发个 get 请求怎么写", "network"},
+		// 跨主题
+		{"长连接通信方式", "network"}, // network vs auth(token) 竞争
+
+		// ===== cache 主题 (5 条) =====
 		{"Redis 缓存读写", "cache"},
 		{"内存缓存 map", "cache"},
 		{"LRU 缓存淘汰", "cache"},
-		{"token 验证", "auth"}, // 跨主题：也期望 auth
+		// 模糊
+		{"数据太大了怎么自动删旧的", "cache"},
+		// 跨主题
+		{"session 存哪", "cache"}, // cache vs auth 竞争
+
+		// ===== config 主题 (5 条) =====
+		{"配置文件加载", "config"},
+		{"环境变量读取", "config"},
+		{"参数校验", "config"},
+		// 模糊
+		{"yaml 文件怎么解析", "config"},
+		// 术语不匹配
+		{"yaml 配置", "config"},
+
+		// ===== errors 主题 (5 条) =====
+		{"自定义错误类型", "errors"},
+		{"错误包装", "errors"},
+		{"panic 恢复", "errors"},
+		// 模糊
+		{"程序崩了怎么不让它挂", "errors"},
+		// 跨主题
+		{"404 怎么判断", "errors"}, // errors vs network 竞争
+
+		// ===== testing 主题 (4 条) =====
+		{"mock 数据库", "testing"},
+		{"断言相等", "testing"},
+		{"临时文件 fixture", "testing"},
+		// 模糊
+		{"测试的时候怎么造假数据", "testing"},
 	}
 }
 
@@ -539,19 +772,21 @@ func TestRAGEndToEndEvaluation(t *testing.T) {
 	t.Logf("Avg Latency (平均检索延迟): %.2f ms", float64(totalLatency.Microseconds())/1000/n)
 	t.Log("======================================")
 
-	// 4. 断言：核心指标达标阈值（简历可用数据）
+	// 4. 断言：核心指标达标阈值
+	// 注意：8 主题每主题 2-4 个文档，top5 必然混入其他主题，
+	// Precision 理论上限约 50-60%，阈值设 0.40 合理。
 	avgRecall := totalRecall / n
 	avgPrecision := totalPrecision / n
 	avgMRR := totalMRR / n
 
-	if avgRecall < 0.5 {
-		t.Errorf("Recall@5 = %.2f, 期望 >= 0.50", avgRecall)
+	if avgRecall < 0.70 {
+		t.Errorf("Recall@5 = %.2f, 期望 >= 0.70", avgRecall)
 	}
-	if avgPrecision < 0.5 {
-		t.Errorf("Precision@5 = %.2f, 期望 >= 0.50", avgPrecision)
+	if avgPrecision < 0.40 {
+		t.Errorf("Precision@5 = %.2f, 期望 >= 0.40", avgPrecision)
 	}
-	if avgMRR < 0.5 {
-		t.Errorf("MRR = %.2f, 期望 >= 0.50", avgMRR)
+	if avgMRR < 0.80 {
+		t.Errorf("MRR = %.2f, 期望 >= 0.80", avgMRR)
 	}
 }
 
