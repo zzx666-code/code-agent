@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 // Package extractor implements the background memory extraction subagent.
 //
 // The TS file uses a closure-scoped state pattern (initExtractMemories returns nothing, but mutates
@@ -39,14 +34,14 @@ import (
 // AppendSystem is the conduit for the "Memory saved: foo.md" notice that the user sees after a
 // successful extraction.
 type Deps struct {
-	MemoryDir     string                  // <wd>/.mewcode/memory/ — project/reference (trailing sep)
-	UserMemoryDir string                  // ~/.mewcode/memory/ — user/feedback (trailing sep); may be "" if $HOME unresolved
-	ProjectRoot   string                  // absolute project root
-	Client        llm.Client              // forked extraction agent's LLM client
-	ToolRegistry  *tools.Registry         // parent tool registry (will be filtered)
-	Protocol      string                  // "anthropic" / "openai"
-	Conversation  *conversation.Manager   // parent conversation reference
-	AppendSystem  func(string)            // optional: notify TUI of saved memories
+	MemoryDir     string                           // <wd>/.mewcode/memory/ — project/reference (trailing sep)
+	UserMemoryDir string                           // ~/.mewcode/memory/ — user/feedback (trailing sep); may be "" if $HOME unresolved
+	ProjectRoot   string                           // absolute project root
+	Client        llm.Client                       // forked extraction agent's LLM client
+	ToolRegistry  *tools.Registry                  // parent tool registry (will be filtered)
+	Protocol      string                           // "anthropic" / "openai"
+	Conversation  *conversation.Manager            // parent conversation reference
+	AppendSystem  func(string)                     // optional: notify TUI of saved memories
 	DebugLogf     func(format string, args ...any) // optional: debug logging
 }
 

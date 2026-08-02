@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package tools
 
 import (
@@ -43,7 +38,7 @@ type AskUserRequest struct {
 
 func (t *AskUserQuestionTool) ShouldDefer() bool { return false }
 
-func (t *AskUserQuestionTool) Name() string        { return "AskUserQuestion" }
+func (t *AskUserQuestionTool) Name() string { return "AskUserQuestion" }
 
 func (t *AskUserQuestionTool) Description() string {
 	return `Ask the user a question with structured multiple-choice options. Use this to:

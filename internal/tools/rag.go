@@ -16,8 +16,8 @@ type RagIndexTool struct {
 	Embedder *rag.Embedder
 }
 
-func (t *RagIndexTool) Name() string        { return "RagIndex" }
-func (t *RagIndexTool) Description() string { return RagIndexDescription }
+func (t *RagIndexTool) Name() string           { return "RagIndex" }
+func (t *RagIndexTool) Description() string    { return RagIndexDescription }
 func (t *RagIndexTool) Category() ToolCategory { return CategoryRead }
 
 func (t *RagIndexTool) Schema() map[string]any {
@@ -134,8 +134,8 @@ type RagSearchTool struct {
 	Embedder *rag.Embedder
 }
 
-func (t *RagSearchTool) Name() string        { return "RagSearch" }
-func (t *RagSearchTool) Description() string { return RagSearchDescription }
+func (t *RagSearchTool) Name() string           { return "RagSearch" }
+func (t *RagSearchTool) Description() string    { return RagSearchDescription }
 func (t *RagSearchTool) Category() ToolCategory { return CategoryRead }
 
 func (t *RagSearchTool) Schema() map[string]any {
@@ -199,8 +199,8 @@ type RagClearTool struct {
 	Store *rag.Store
 }
 
-func (t *RagClearTool) Name() string        { return "RagClear" }
-func (t *RagClearTool) Description() string { return RagClearDescription }
+func (t *RagClearTool) Name() string           { return "RagClear" }
+func (t *RagClearTool) Description() string    { return RagClearDescription }
 func (t *RagClearTool) Category() ToolCategory { return CategoryRead }
 
 func (t *RagClearTool) Schema() map[string]any {

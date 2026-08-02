@@ -1,9 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
-
 package memory
 
 import (
@@ -19,11 +13,11 @@ func TestMemoryAgeDays(t *testing.T) {
 		mtimeMs int64
 		want    int
 	}{
-		"today (now)":           {now, 0},
-		"today (a few hours)":   {now - day/4, 0},
-		"yesterday":             {now - day, 1},
-		"47 days":               {now - day*47, 47},
-		"future clamps to 0":    {now + day, 0},
+		"today (now)":            {now, 0},
+		"today (a few hours)":    {now - day/4, 0},
+		"yesterday":              {now - day, 1},
+		"47 days":                {now - day*47, 47},
+		"future clamps to 0":     {now + day, 0},
 		"a second in the future": {now + 1000, 0},
 	}
 	for name, tc := range cases {
@@ -39,10 +33,10 @@ func TestMemoryAge(t *testing.T) {
 	now := time.Now().UnixMilli()
 	day := int64(86_400_000)
 	cases := map[int64]string{
-		now:            "today",
-		now - day:      "yesterday",
-		now - day*2:    "2 days ago",
-		now - day*100:  "100 days ago",
+		now:           "today",
+		now - day:     "yesterday",
+		now - day*2:   "2 days ago",
+		now - day*100: "100 days ago",
 	}
 	for mtime, want := range cases {
 		if got := MemoryAge(mtime); got != want {

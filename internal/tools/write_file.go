@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package tools
 
 import (
@@ -19,11 +14,11 @@ type WriteFileTool struct {
 	FileStateCache *FileStateCache
 }
 
-func (t *WriteFileTool) Name() string            { return "WriteFile" }
+func (t *WriteFileTool) Name() string { return "WriteFile" }
 
-func (t *WriteFileTool) Description() string     { return WriteFileDescription }
+func (t *WriteFileTool) Description() string { return WriteFileDescription }
 
-func (t *WriteFileTool) Category() ToolCategory  { return CategoryWrite }
+func (t *WriteFileTool) Category() ToolCategory { return CategoryWrite }
 
 func (t *WriteFileTool) Schema() map[string]any {
 	return map[string]any{

@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package config
 
 import (
@@ -27,8 +22,6 @@ var validProtocols = map[string]bool{
 	"openai":        true,
 	"openai-compat": true,
 }
-
-
 
 type ConfigError struct {
 	Message string
@@ -172,8 +165,8 @@ type MCPServerConfig struct {
 // SandboxConfig 控制 OS 级沙箱的配置
 type SandboxConfig struct {
 	Enabled        bool `yaml:"enabled"`         // 是否启用沙箱
-	AutoAllow      bool `yaml:"auto_allow"`       // 沙箱内命令是否自动放行
-	NetworkEnabled bool `yaml:"network_enabled"`  // 是否允许网络访问
+	AutoAllow      bool `yaml:"auto_allow"`      // 沙箱内命令是否自动放行
+	NetworkEnabled bool `yaml:"network_enabled"` // 是否允许网络访问
 }
 
 type AppConfig struct {
@@ -260,7 +253,6 @@ func validateProviders(cfg *AppConfig) error {
 	}
 	return nil
 }
-
 
 func LoadConfig(path string) (*AppConfig, error) {
 	if path != "" {

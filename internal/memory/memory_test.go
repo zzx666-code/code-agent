@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package memory
 
 import (
@@ -37,11 +32,11 @@ func TestIsAutoMemPath(t *testing.T) {
 	root := "/tmp/p"
 	dir := GetAutoMemPath(root)
 	cases := map[string]bool{
-		dir + "MEMORY.md":           true,
-		dir + "foo.md":               true,
-		dir + "sub/foo.md":           true,
-		"/tmp/p/.mewcode/memoryx":    false,
-		"/other/path/foo.md":         false,
+		dir + "MEMORY.md":         true,
+		dir + "foo.md":            true,
+		dir + "sub/foo.md":        true,
+		"/tmp/p/.mewcode/memoryx": false,
+		"/other/path/foo.md":      false,
 	}
 	for path, want := range cases {
 		if got := IsAutoMemPath(path, root); got != want {

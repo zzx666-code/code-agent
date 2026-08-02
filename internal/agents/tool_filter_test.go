@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package agents
 
 import (
@@ -17,12 +12,14 @@ type dummyTool struct {
 	category tools.ToolCategory
 }
 
-func (d *dummyTool) Name() string                                              { return d.name }
-func (d *dummyTool) Description() string                                       { return "test tool" }
-func (d *dummyTool) Category() tools.ToolCategory                              { return d.category }
+func (d *dummyTool) Name() string                 { return d.name }
+func (d *dummyTool) Description() string          { return "test tool" }
+func (d *dummyTool) Category() tools.ToolCategory { return d.category }
 
-func (d *dummyTool) Schema() map[string]any                                    { return nil }
-func (d *dummyTool) Execute(_ context.Context, _ map[string]any) tools.ToolResult { return tools.ToolResult{} }
+func (d *dummyTool) Schema() map[string]any { return nil }
+func (d *dummyTool) Execute(_ context.Context, _ map[string]any) tools.ToolResult {
+	return tools.ToolResult{}
+}
 
 func makeRegistry(names ...string) *tools.Registry {
 	reg := tools.NewRegistry()

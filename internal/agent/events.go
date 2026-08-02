@@ -1,21 +1,18 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package agent
 
 import "time"
 
 type AgentEvent interface{ agentEvent() }
 
-type StreamText struct{ Text string }
-type ThinkingText struct{ Text string }
-type ToolUseEvent struct {
-	ToolID   string
-	ToolName string
-	Args     map[string]any
-}
+type (
+	StreamText   struct{ Text string }
+	ThinkingText struct{ Text string }
+	ToolUseEvent struct {
+		ToolID   string
+		ToolName string
+		Args     map[string]any
+	}
+)
 type ToolResultEvent struct {
 	ToolID   string
 	ToolName string
@@ -23,15 +20,17 @@ type ToolResultEvent struct {
 	IsError  bool
 	Elapsed  time.Duration
 }
-type TurnComplete struct{ Turn int }
-type LoopComplete struct{ TotalTurns int }
-type UsageEvent struct{ InputTokens, OutputTokens int }
-type ErrorEvent struct{ Message string }
-type CompactEvent struct{ Message string }
-type RetryEvent struct {
-	Reason string
-	Wait   time.Duration
-}
+type (
+	TurnComplete struct{ Turn int }
+	LoopComplete struct{ TotalTurns int }
+	UsageEvent   struct{ InputTokens, OutputTokens int }
+	ErrorEvent   struct{ Message string }
+	CompactEvent struct{ Message string }
+	RetryEvent   struct {
+		Reason string
+		Wait   time.Duration
+	}
+)
 
 type PermissionResponse int
 
@@ -47,19 +46,19 @@ type PermissionRequestEvent struct {
 	ResponseCh chan<- PermissionResponse
 }
 
-func (StreamText) agentEvent()           {}
+func (StreamText) agentEvent() {}
 
-func (ThinkingText) agentEvent()         {}
+func (ThinkingText) agentEvent() {}
 
-func (ToolUseEvent) agentEvent()         {}
-func (ToolResultEvent) agentEvent()      {}
+func (ToolUseEvent) agentEvent()    {}
+func (ToolResultEvent) agentEvent() {}
 
-func (TurnComplete) agentEvent()         {}
+func (TurnComplete) agentEvent() {}
 
-func (LoopComplete) agentEvent()         {}
-func (UsageEvent) agentEvent()           {}
-func (ErrorEvent) agentEvent()             {}
-func (CompactEvent) agentEvent()           {}
+func (LoopComplete) agentEvent() {}
+func (UsageEvent) agentEvent()   {}
+func (ErrorEvent) agentEvent()   {}
+func (CompactEvent) agentEvent() {}
 
 func (RetryEvent) agentEvent()             {}
 func (PermissionRequestEvent) agentEvent() {}

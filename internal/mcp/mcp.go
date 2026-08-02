@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package mcp
 
 import (
@@ -75,8 +70,8 @@ func newHTTPClient(headers map[string]string) *http.Client {
 }
 
 type Client struct {
-	config  ServerConfig
-	session *mcp.ClientSession
+	config    ServerConfig
+	session   *mcp.ClientSession
 	sdkClient *mcp.Client
 }
 
@@ -256,9 +251,9 @@ func (w *MCPToolWrapper) Name() string {
 func SanitizeName(name string) string {
 	return nonAlphanumeric.ReplaceAllString(name, "_")
 }
-func (w *MCPToolWrapper) Description() string { return w.toolDef.Description }
+func (w *MCPToolWrapper) Description() string          { return w.toolDef.Description }
 func (w *MCPToolWrapper) Category() tools.ToolCategory { return tools.CategoryCommand }
-func (w *MCPToolWrapper) ShouldDefer() bool             { return true }
+func (w *MCPToolWrapper) ShouldDefer() bool            { return true }
 
 func (w *MCPToolWrapper) Schema() map[string]any {
 	inputSchema := w.toolDef.InputSchema

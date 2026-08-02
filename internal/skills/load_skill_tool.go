@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package skills
 
 import (
@@ -23,11 +18,11 @@ type LoadSkillTool struct {
 	Host    SkillHost
 }
 
-func (t *LoadSkillTool) Name() string                 { return "LoadSkill" }
+func (t *LoadSkillTool) Name() string { return "LoadSkill" }
 
 func (t *LoadSkillTool) Category() tools.ToolCategory { return tools.CategoryRead }
 
-func (t *LoadSkillTool) IsSystemTool() bool           { return true }
+func (t *LoadSkillTool) IsSystemTool() bool { return true }
 
 func (t *LoadSkillTool) Description() string {
 	return "Activate a Skill by name. Returns the full SOP body so you can follow its " +

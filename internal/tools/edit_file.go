@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package tools
 
 import (
@@ -19,11 +14,11 @@ type EditFileTool struct {
 	FileStateCache *FileStateCache
 }
 
-func (t *EditFileTool) Name() string            { return "EditFile" }
+func (t *EditFileTool) Name() string { return "EditFile" }
 
-func (t *EditFileTool) Description() string     { return EditFileDescription }
+func (t *EditFileTool) Description() string { return EditFileDescription }
 
-func (t *EditFileTool) Category() ToolCategory  { return CategoryWrite }
+func (t *EditFileTool) Category() ToolCategory { return CategoryWrite }
 
 func (t *EditFileTool) Schema() map[string]any {
 	return map[string]any{

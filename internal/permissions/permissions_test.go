@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package permissions
 
 import (
@@ -29,8 +24,8 @@ func (t *fakeTool) Execute(ctx context.Context, args map[string]any) tools.ToolR
 
 func TestDetectDangerous(t *testing.T) {
 	cases := []struct {
-		cmd   string
-		want  bool
+		cmd  string
+		want bool
 	}{
 		{"rm -rf /", true},
 		{"mkfs.ext4 /dev/sda1", true},

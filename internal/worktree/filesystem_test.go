@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package worktree
 
 import (
@@ -34,7 +29,7 @@ func initBareRepoWithCommit(t *testing.T, root string) string {
 	runOrSkip("config", "user.email", "ch14@example.com")
 	runOrSkip("config", "user.name", "ch14")
 	runOrSkip("config", "commit.gpgsign", "false")
-	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("hi\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("hi\n"), 0o644); err != nil {
 		t.Fatalf("write README: %v", err)
 	}
 	runOrSkip("add", ".")

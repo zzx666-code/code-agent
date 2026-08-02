@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	chunkTokenTarget = 512
+	chunkTokenTarget  = 512
 	chunkTokenOverlap = 50
-	skipDirsName = ".mewcode-skip"
+	skipDirsName      = ".mewcode-skip"
 )
 
 var skipDirs = map[string]bool{

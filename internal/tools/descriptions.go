@@ -1,9 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
-
 package tools
 
 const BashDescription = `Execute a shell command and return stdout and stderr.
@@ -91,5 +85,3 @@ Usage notes:
 - Requires the target files to have been indexed via RagIndex first.`
 
 const RagClearDescription = `Clear the RAG vector store, removing all indexed chunks and metadata.`
-
-

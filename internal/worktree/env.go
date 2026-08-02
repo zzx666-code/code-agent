@@ -1,9 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
-
 package worktree
 
 import (
@@ -53,4 +47,3 @@ func runGit(ctx context.Context, dir string, args ...string) (stdout, stderr str
 	// Process failed to start (git not on PATH, dir doesn't exist, etc.).
 	return stdout, stderr, -1
 }
-

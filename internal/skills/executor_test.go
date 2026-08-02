@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package skills
 
 import (
@@ -32,8 +27,8 @@ func newStubHost(reg *tools.Registry) *stubHost {
 	return &stubHost{activated: map[string]string{}, registry: reg}
 }
 
-func (s *stubHost) ActivateSkill(name, body string)        { s.activated[name] = body }
-func (s *stubHost) ToolRegistry() *tools.Registry          { return s.registry }
+func (s *stubHost) ActivateSkill(name, body string) { s.activated[name] = body }
+func (s *stubHost) ToolRegistry() *tools.Registry   { return s.registry }
 func (s *stubHost) SnapshotParentMessages() []conversation.Message {
 	out := make([]conversation.Message, len(s.parentMsgs))
 	copy(out, s.parentMsgs)

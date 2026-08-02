@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package tools
 
 import (
@@ -60,13 +55,13 @@ func IsSystemTool(t Tool) bool {
 }
 
 type Registry struct {
-	tools          map[string]Tool
+	tools           map[string]Tool
 	discoveredTools map[string]bool
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
-		tools:          make(map[string]Tool),
+		tools:           make(map[string]Tool),
 		discoveredTools: make(map[string]bool),
 	}
 }

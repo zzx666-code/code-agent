@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package teams
 
 import (
@@ -27,7 +22,7 @@ type FileMailMessage struct {
 }
 
 func NewFileMailBox(baseDir string) *FileMailBox {
-	os.MkdirAll(baseDir, 0755)
+	os.MkdirAll(baseDir, 0o755)
 	return &FileMailBox{baseDir: baseDir}
 }
 
@@ -80,7 +75,7 @@ func (mb *FileMailBox) withLock(agentID string, fn func([]FileMailMessage) ([]Fi
 	var lockFd *os.File
 	var err error
 	for attempt := 0; attempt < 10; attempt++ {
-		lockFd, err = os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		lockFd, err = os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 		if err == nil {
 			break
 		}
@@ -137,6 +132,5 @@ func (mb *FileMailBox) writeInbox(agentID string, messages []FileMailMessage) er
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0o644)
 }
-

@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package agents
 
 import (
@@ -22,11 +17,11 @@ import (
 type TaskStatus string
 
 const (
-	TaskPending    TaskStatus = "pending"
-	TaskRunning    TaskStatus = "running"
-	TaskCompleted  TaskStatus = "completed"
-	TaskFailed     TaskStatus = "failed"
-	TaskCancelled  TaskStatus = "cancelled"
+	TaskPending   TaskStatus = "pending"
+	TaskRunning   TaskStatus = "running"
+	TaskCompleted TaskStatus = "completed"
+	TaskFailed    TaskStatus = "failed"
+	TaskCancelled TaskStatus = "cancelled"
 )
 
 type Task struct {
@@ -41,9 +36,9 @@ type Task struct {
 }
 
 type TaskManager struct {
-	mu    sync.Mutex
-	tasks map[string]*Task
-	nextID int
+	mu            sync.Mutex
+	tasks         map[string]*Task
+	nextID        int
 	notifications []TaskNotification
 }
 

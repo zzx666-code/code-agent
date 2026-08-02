@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 // Package worktree filesystem helpers: read git state without spawning git subprocesses. from the
 // design TypeScript implementation.
 //
@@ -47,8 +42,10 @@ func IsSafeRefName(name string) bool {
 	return safeRefName.MatchString(name)
 }
 
-var sha1Pattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
-var sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+var (
+	sha1Pattern   = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+)
 
 // IsValidGitSha reports whether s is a full-length SHA-1 (40 hex) or SHA-256 (64 hex) git object
 // id. Git never writes abbreviated SHAs to HEAD or ref files.

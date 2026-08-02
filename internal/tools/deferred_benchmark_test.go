@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package tools
 
 import (
@@ -23,9 +18,9 @@ type realisticMCPTool struct {
 }
 
 func (t *realisticMCPTool) Name() string           { return t.name }
-func (t *realisticMCPTool) Description() string     { return t.desc }
-func (t *realisticMCPTool) Category() ToolCategory  { return CategoryCommand }
-func (t *realisticMCPTool) ShouldDefer() bool       { return true }
+func (t *realisticMCPTool) Description() string    { return t.desc }
+func (t *realisticMCPTool) Category() ToolCategory { return CategoryCommand }
+func (t *realisticMCPTool) ShouldDefer() bool      { return true }
 func (t *realisticMCPTool) Schema() map[string]any {
 	return map[string]any{
 		"name":        t.name,
@@ -37,6 +32,7 @@ func (t *realisticMCPTool) Schema() map[string]any {
 		},
 	}
 }
+
 func (t *realisticMCPTool) Execute(_ context.Context, _ map[string]any) ToolResult {
 	return ToolResult{Output: "ok"}
 }
@@ -53,14 +49,14 @@ func makeRealisticTools(n int) []*realisticMCPTool {
 			namePrefix: "mcp__grafana__query_prometheus",
 			desc:       "Execute a PromQL query against the specified Prometheus datasource and return time-series or instant results. Supports range queries with configurable step and time window.",
 			params: map[string]any{
-				"expr":       map[string]any{"type": "string", "description": "PromQL query expression to evaluate against the datasource"},
-				"datasource": map[string]any{"type": "string", "description": "Name or UID of the Prometheus datasource to query"},
-				"start":      map[string]any{"type": "string", "description": "Start of the time range in RFC3339 format or relative (e.g. 'now-1h')"},
-				"end":        map[string]any{"type": "string", "description": "End of the time range in RFC3339 format or relative (e.g. 'now')"},
-				"step":       map[string]any{"type": "string", "description": "Query resolution step width in Prometheus duration format (e.g. '15s', '1m')"},
-				"format":     map[string]any{"type": "string", "description": "Output format for results", "enum": []string{"table", "timeseries", "json"}},
+				"expr":        map[string]any{"type": "string", "description": "PromQL query expression to evaluate against the datasource"},
+				"datasource":  map[string]any{"type": "string", "description": "Name or UID of the Prometheus datasource to query"},
+				"start":       map[string]any{"type": "string", "description": "Start of the time range in RFC3339 format or relative (e.g. 'now-1h')"},
+				"end":         map[string]any{"type": "string", "description": "End of the time range in RFC3339 format or relative (e.g. 'now')"},
+				"step":        map[string]any{"type": "string", "description": "Query resolution step width in Prometheus duration format (e.g. '15s', '1m')"},
+				"format":      map[string]any{"type": "string", "description": "Output format for results", "enum": []string{"table", "timeseries", "json"}},
 				"max_results": map[string]any{"type": "integer", "description": "Maximum number of time series to return", "default": 100},
-				"legend":     map[string]any{"type": "string", "description": "Legend format template for result series names"},
+				"legend":      map[string]any{"type": "string", "description": "Legend format template for result series names"},
 			},
 		},
 		{
@@ -106,10 +102,10 @@ func makeRealisticTools(n int) []*realisticMCPTool {
 			namePrefix: "mcp__playwright__browser_fill",
 			desc:       "Fill an input field with text. Clears existing content before typing. Works with input, textarea, and contenteditable elements. Dispatches input and change events.",
 			params: map[string]any{
-				"selector": map[string]any{"type": "string", "description": "CSS selector or text selector for the input element to fill"},
-				"value":    map[string]any{"type": "string", "description": "Text value to fill into the input field"},
-				"force":    map[string]any{"type": "boolean", "description": "Whether to bypass actionability checks"},
-				"timeout":  map[string]any{"type": "integer", "description": "Maximum time in milliseconds to wait for element", "default": 30000},
+				"selector":    map[string]any{"type": "string", "description": "CSS selector or text selector for the input element to fill"},
+				"value":       map[string]any{"type": "string", "description": "Text value to fill into the input field"},
+				"force":       map[string]any{"type": "boolean", "description": "Whether to bypass actionability checks"},
+				"timeout":     map[string]any{"type": "integer", "description": "Maximum time in milliseconds to wait for element", "default": 30000},
 				"noWaitAfter": map[string]any{"type": "boolean", "description": "If true, do not wait for navigation events after filling"},
 			},
 		},

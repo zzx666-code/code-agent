@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package tools
 
 import (
@@ -18,11 +13,11 @@ import (
 
 type GrepTool struct{}
 
-func (t *GrepTool) Name() string            { return "Grep" }
+func (t *GrepTool) Name() string { return "Grep" }
 
-func (t *GrepTool) Description() string     { return GrepDescription }
+func (t *GrepTool) Description() string { return GrepDescription }
 
-func (t *GrepTool) Category() ToolCategory  { return CategoryRead }
+func (t *GrepTool) Category() ToolCategory { return CategoryRead }
 
 func (t *GrepTool) Schema() map[string]any {
 	return map[string]any{

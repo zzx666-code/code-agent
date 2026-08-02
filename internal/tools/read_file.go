@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package tools
 
 import (
@@ -16,10 +11,10 @@ type ReadFileTool struct {
 	FileStateCache *FileStateCache
 }
 
-func (t *ReadFileTool) Name() string            { return "ReadFile" }
-func (t *ReadFileTool) Description() string     { return ReadFileDescription }
+func (t *ReadFileTool) Name() string        { return "ReadFile" }
+func (t *ReadFileTool) Description() string { return ReadFileDescription }
 
-func (t *ReadFileTool) Category() ToolCategory  { return CategoryRead }
+func (t *ReadFileTool) Category() ToolCategory { return CategoryRead }
 
 func (t *ReadFileTool) Schema() map[string]any {
 	return map[string]any{

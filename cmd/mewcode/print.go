@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package main
 
 import (
@@ -32,13 +27,13 @@ import (
 )
 
 type printResult struct {
-	Type        string         `json:"type"`
-	Result      string         `json:"result"`
-	DurationMs  int64          `json:"duration_ms"`
-	NumTurns    int            `json:"num_turns"`
-	ToolCalls   []toolCallInfo `json:"tool_calls"`
-	Usage       usageInfo      `json:"usage"`
-	StopReason  string         `json:"stop_reason"`
+	Type       string         `json:"type"`
+	Result     string         `json:"result"`
+	DurationMs int64          `json:"duration_ms"`
+	NumTurns   int            `json:"num_turns"`
+	ToolCalls  []toolCallInfo `json:"tool_calls"`
+	Usage      usageInfo      `json:"usage"`
+	StopReason string         `json:"stop_reason"`
 }
 
 type toolCallInfo struct {

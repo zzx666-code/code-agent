@@ -1,15 +1,8 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
-
 package llm
 
 import "mewcode/internal/config"
 
 var modelAliases = map[string]string{
-
 	"haiku":  "claude-haiku-4-5-20251001",
 	"sonnet": "claude-sonnet-4-6-20250514",
 	"opus":   "claude-opus-4-6-20250514",
@@ -27,4 +20,3 @@ func NewModelResolver(baseCfg config.ProviderConfig) func(string) (Client, error
 		return NewClient(&cfg, "")
 	}
 }
-

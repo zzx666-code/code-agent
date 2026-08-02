@@ -1,9 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
-
 // Package toolresult implements MewCode's Design-B tool-result budget:
 // every replacement decision is recorded in ContentReplacementState and
 // applied to a freshly-built *conversation.Manager so the input conversation
@@ -52,4 +46,3 @@ func (s *ContentReplacementState) Clone() *ContentReplacementState {
 	}
 	return out
 }
-

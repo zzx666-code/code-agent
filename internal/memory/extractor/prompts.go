@@ -1,9 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
-
 // Package extractor implements the background memory extraction subagent.
 //
 // The extraction agent runs as a perfect fork of the main conversation — same system prompt, same
@@ -119,4 +113,3 @@ func BuildExtractAutoOnlyPrompt(newMessageCount int, existingMemories string, sk
 	parts = append(parts, howToSave...)
 	return strings.Join(parts, "\n")
 }
-

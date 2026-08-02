@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package remote
 
 import (
@@ -557,7 +552,7 @@ func (s *Server) handleSlashCommand(input string) {
 func (s *Server) buildCommandContext(args string) *commands.Context {
 	wd, _ := os.Getwd()
 	return &commands.Context{
-		Args: args,
+		Args:       args,
 		TokenCount: func() (int, int) { return 0, 0 },
 		PermissionMode: func() string {
 			if s.ag != nil && s.ag.Checker != nil {
@@ -566,7 +561,7 @@ func (s *Server) buildCommandContext(args string) *commands.Context {
 			return "default"
 		},
 		SetPermissionMode: func(mode string) error { return nil },
-		ToolCount: func() int { return len(s.registry.ListTools()) },
+		ToolCount:         func() int { return len(s.registry.ListTools()) },
 		SessionInfo: func() string {
 			return fmt.Sprintf("Session: %s\nCWD: %s", s.sessionID, wd)
 		},
@@ -779,8 +774,8 @@ func (s *Server) consumeAgentEvents() {
 			s.pendingPerms[id] = e.ResponseCh
 			s.pendingPermMu.Unlock()
 			s.send(wsMessage{Type: "permission_request", Data: map[string]string{
-				"id":       id,
-				"toolName": e.ToolName,
+				"id":          id,
+				"toolName":    e.ToolName,
 				"description": e.Desc,
 			}})
 

@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package agent
 
 import (
@@ -19,9 +14,9 @@ type StreamingExecutor struct {
 	checker  *permissions.Checker
 	eventCh  chan AgentEvent
 
-	mu       sync.Mutex
-	pending  []pendingTool
-	wg       sync.WaitGroup
+	mu      sync.Mutex
+	pending []pendingTool
+	wg      sync.WaitGroup
 }
 
 type pendingTool struct {

@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 // Package consolidation 实现后台记忆整理（autoDream）。
 //
 // 满足两个门控条件后自动触发：距上次整理超过 minHours 小时，
@@ -50,10 +45,10 @@ type Deps struct {
 
 // Consolidator 管理后台记忆整理的状态和执行。
 type Consolidator struct {
-	deps           Deps
-	lastScanAt     int64 // 上次扫描会话目录的时间（ms）
-	minHours       int
-	minSessions    int
+	deps        Deps
+	lastScanAt  int64 // 上次扫描会话目录的时间（ms）
+	minHours    int
+	minSessions int
 }
 
 // NewConsolidator 创建一个新的整理器。

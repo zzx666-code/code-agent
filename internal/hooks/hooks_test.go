@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package hooks
 
 import (
@@ -22,19 +17,19 @@ func TestEvaluateConditionLeafOps(t *testing.T) {
 		ToolArgs:  map[string]any{"command": "rm -rf /"},
 	}
 	cases := map[string]bool{
-		`tool == "Bash"`:                  true,
-		`tool == "Read"`:                  false,
-		`tool != "Read"`:                  true,
-		`event =~ /^pre_/`:                true,
-		`args.command =~ /rm -rf/`:        true,
-		`file_path =* "src/*.go"`:         true,
-		`file_path =* "src/*.py"`:         false,
+		`tool == "Bash"`:                            true,
+		`tool == "Read"`:                            false,
+		`tool != "Read"`:                            true,
+		`event =~ /^pre_/`:                          true,
+		`args.command =~ /rm -rf/`:                  true,
+		`file_path =* "src/*.go"`:                   true,
+		`file_path =* "src/*.py"`:                   false,
 		`tool == "Bash" && file_path =* "src/*.go"`: true,
 		`tool == "Bash" && file_path =* "src/*.py"`: false,
 		`tool == "Read" || tool == "Bash"`:          true,
 		`tool == "Read" || tool == "Write"`:         false,
-		`!(tool == "Read")`:               true, // ! before parens — falls through evaluateLeaf
-		`!tool == "Read"`:                 true, // ! applied to leaf
+		`!(tool == "Read")`:                         true, // ! before parens — falls through evaluateLeaf
+		`!tool == "Read"`:                           true, // ! applied to leaf
 	}
 	for cond, want := range cases {
 		if got := evaluateCondition(cond, ctx); got != want {

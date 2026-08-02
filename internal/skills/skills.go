@@ -1,9 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
-
 package skills
 
 import (
@@ -86,4 +80,3 @@ func (s *Skill) renderForkDirective(body string) string {
 	sb.WriteString("\n\nReport back only the sub-agent's final summary; do not perform the skill's steps yourself.")
 	return sb.String()
 }
-

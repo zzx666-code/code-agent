@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package tools
 
 import (
@@ -16,11 +11,11 @@ import (
 
 type GlobTool struct{}
 
-func (t *GlobTool) Name() string            { return "Glob" }
+func (t *GlobTool) Name() string { return "Glob" }
 
-func (t *GlobTool) Description() string     { return GlobDescription }
+func (t *GlobTool) Description() string { return GlobDescription }
 
-func (t *GlobTool) Category() ToolCategory  { return CategoryRead }
+func (t *GlobTool) Category() ToolCategory { return CategoryRead }
 
 func (t *GlobTool) Schema() map[string]any {
 	return map[string]any{

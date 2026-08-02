@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package agents
 
 import (
@@ -27,7 +22,7 @@ maxTurns: 25
 
 You are a test agent. Do test things.`
 
-	os.WriteFile(path, []byte(content), 0644)
+	os.WriteFile(path, []byte(content), 0o644)
 
 	def, err := ParseAgentFile(path)
 	if err != nil {
@@ -61,7 +56,7 @@ description: No name field
 ---
 
 Body text.`
-	os.WriteFile(path, []byte(content), 0644)
+	os.WriteFile(path, []byte(content), 0o644)
 
 	_, err := ParseAgentFile(path)
 	if err == nil {
@@ -83,7 +78,7 @@ model: glm-5.1
 ---
 
 Body.`
-	os.WriteFile(path, []byte(content), 0644)
+	os.WriteFile(path, []byte(content), 0o644)
 
 	def, err := ParseAgentFile(path)
 	if err != nil {
@@ -104,7 +99,7 @@ model: INHERIT
 ---
 
 Body.`
-	os.WriteFile(path, []byte(content), 0644)
+	os.WriteFile(path, []byte(content), 0o644)
 	def, err := ParseAgentFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +192,7 @@ requiredMcpServers: ["github"]
 maxTurns: 5
 ---
 body`
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	def, err := ParseAgentFile(path)
@@ -248,7 +243,7 @@ description: invalid mode
 permissionMode: bogus
 ---
 body`
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ParseAgentFile(path); err == nil {
@@ -273,7 +268,7 @@ func TestHasRequiredMcpServers(t *testing.T) {
 func TestLoaderProjectOverridesBuiltin(t *testing.T) {
 	dir := t.TempDir()
 	agentsDir := filepath.Join(dir, ".mewcode", "agents")
-	os.MkdirAll(agentsDir, 0755)
+	os.MkdirAll(agentsDir, 0o755)
 
 	content := `---
 name: explore
@@ -284,7 +279,7 @@ maxTurns: 50
 
 You are a custom explore agent.`
 
-	os.WriteFile(filepath.Join(agentsDir, "explore.md"), []byte(content), 0644)
+	os.WriteFile(filepath.Join(agentsDir, "explore.md"), []byte(content), 0o644)
 
 	loader := NewAgentLoader(dir)
 	loader.LoadAll()

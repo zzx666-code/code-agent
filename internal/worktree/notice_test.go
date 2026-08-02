@@ -1,9 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
-
 package worktree
 
 import (
@@ -16,7 +10,6 @@ func TestBuildWorktreeNotice(t *testing.T) {
 
 	// Must contain both paths
 	if !strings.Contains(notice, "/home/user/project") {
-
 		t.Fatal("notice should contain parent CWD")
 	}
 	if !strings.Contains(notice, "agent-a1234567") {
@@ -34,4 +27,3 @@ func TestBuildWorktreeNotice(t *testing.T) {
 		t.Fatal("notice should tell agent to re-read files")
 	}
 }
-

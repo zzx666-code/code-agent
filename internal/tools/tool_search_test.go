@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package tools
 
 import (
@@ -18,10 +13,10 @@ type mockDeferredTool struct {
 	desc string
 }
 
-func (t *mockDeferredTool) Name() string        { return t.name }
-func (t *mockDeferredTool) Description() string  { return t.desc }
+func (t *mockDeferredTool) Name() string           { return t.name }
+func (t *mockDeferredTool) Description() string    { return t.desc }
 func (t *mockDeferredTool) Category() ToolCategory { return CategoryCommand }
-func (t *mockDeferredTool) ShouldDefer() bool    { return true }
+func (t *mockDeferredTool) ShouldDefer() bool      { return true }
 
 func (t *mockDeferredTool) Schema() map[string]any {
 	return map[string]any{
@@ -33,6 +28,7 @@ func (t *mockDeferredTool) Schema() map[string]any {
 		},
 	}
 }
+
 func (t *mockDeferredTool) Execute(ctx context.Context, args map[string]any) ToolResult {
 	return ToolResult{Output: "ok"}
 }
@@ -42,16 +38,17 @@ type mockNormalTool struct {
 	name string
 }
 
-func (t *mockNormalTool) Name() string        { return t.name }
-func (t *mockNormalTool) Description() string  { return "normal tool" }
+func (t *mockNormalTool) Name() string           { return t.name }
+func (t *mockNormalTool) Description() string    { return "normal tool" }
 func (t *mockNormalTool) Category() ToolCategory { return CategoryRead }
 func (t *mockNormalTool) Schema() map[string]any {
 	return map[string]any{
-		"name":        t.name,
-		"description": "normal tool",
+		"name":         t.name,
+		"description":  "normal tool",
 		"input_schema": map[string]any{"type": "object", "properties": map[string]any{}},
 	}
 }
+
 func (t *mockNormalTool) Execute(ctx context.Context, args map[string]any) ToolResult {
 	return ToolResult{Output: "ok"}
 }
@@ -62,8 +59,8 @@ type mockMCPTool struct {
 	desc string
 }
 
-func (t *mockMCPTool) Name() string        { return t.name }
-func (t *mockMCPTool) Description() string  { return t.desc }
+func (t *mockMCPTool) Name() string           { return t.name }
+func (t *mockMCPTool) Description() string    { return t.desc }
 func (t *mockMCPTool) Category() ToolCategory { return CategoryCommand }
 func (t *mockMCPTool) Schema() map[string]any {
 	return map[string]any{
@@ -75,6 +72,7 @@ func (t *mockMCPTool) Schema() map[string]any {
 		},
 	}
 }
+
 func (t *mockMCPTool) Execute(ctx context.Context, args map[string]any) ToolResult {
 	return ToolResult{Output: "ok"}
 }
@@ -238,9 +236,9 @@ type mockLargeDeferredTool struct {
 }
 
 func (t *mockLargeDeferredTool) Name() string           { return t.name }
-func (t *mockLargeDeferredTool) Description() string     { return t.desc }
-func (t *mockLargeDeferredTool) Category() ToolCategory  { return CategoryCommand }
-func (t *mockLargeDeferredTool) ShouldDefer() bool       { return true }
+func (t *mockLargeDeferredTool) Description() string    { return t.desc }
+func (t *mockLargeDeferredTool) Category() ToolCategory { return CategoryCommand }
+func (t *mockLargeDeferredTool) ShouldDefer() bool      { return true }
 func (t *mockLargeDeferredTool) Schema() map[string]any {
 	return map[string]any{
 		"name":        t.name,

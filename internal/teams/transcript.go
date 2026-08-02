@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package teams
 
 import (
@@ -15,10 +10,10 @@ import (
 
 // transcriptEntry 是序列化到磁盘的单条对话记录。
 type transcriptEntry struct {
-	Role        string                   `json:"role"`
-	Content     string                   `json:"content,omitempty"`
-	ToolUses    []transcriptToolUse      `json:"tool_uses,omitempty"`
-	ToolResults []transcriptToolResult   `json:"tool_results,omitempty"`
+	Role        string                 `json:"role"`
+	Content     string                 `json:"content,omitempty"`
+	ToolUses    []transcriptToolUse    `json:"tool_uses,omitempty"`
+	ToolResults []transcriptToolResult `json:"tool_results,omitempty"`
 }
 
 type transcriptToolUse struct {

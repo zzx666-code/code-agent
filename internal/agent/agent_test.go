@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package agent
 
 import (
@@ -88,15 +83,18 @@ type mockTool struct {
 	result string
 }
 
-func (t *mockTool) Name() string                                               { return t.name }
-func (t *mockTool) Description() string                                        { return "mock tool" }
-func (t *mockTool) Category() tools.ToolCategory                               { return tools.CategoryRead }
+func (t *mockTool) Name() string { return t.name }
+func (t *mockTool) Description() string { return "mock tool" }
+
+func (t *mockTool) Category() tools.ToolCategory { return tools.CategoryRead }
+
 func (t *mockTool) Schema() map[string]any {
 	return map[string]any{
 		"name": t.name, "description": "mock",
 		"input_schema": map[string]any{"type": "object", "properties": map[string]any{}},
 	}
 }
+
 func (t *mockTool) Execute(ctx context.Context, args map[string]any) tools.ToolResult {
 	return tools.ToolResult{Output: t.result}
 }

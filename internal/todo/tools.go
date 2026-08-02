@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package todo
 
 import (
@@ -18,7 +13,7 @@ type TaskCreateTool struct {
 	List *TaskList
 }
 
-func (t *TaskCreateTool) Name() string           { return "TaskCreate" }
+func (t *TaskCreateTool) Name() string { return "TaskCreate" }
 
 func (t *TaskCreateTool) Category() tools.ToolCategory { return tools.CategoryWrite }
 
@@ -72,7 +67,7 @@ type TaskGetTool struct {
 	List *TaskList
 }
 
-func (t *TaskGetTool) Name() string           { return "TaskGet" }
+func (t *TaskGetTool) Name() string                 { return "TaskGet" }
 func (t *TaskGetTool) Category() tools.ToolCategory { return tools.CategoryRead }
 
 func (t *TaskGetTool) Description() string {
@@ -129,7 +124,7 @@ type TaskListTool struct {
 	List *TaskList
 }
 
-func (t *TaskListTool) Name() string           { return "TaskList" }
+func (t *TaskListTool) Name() string                 { return "TaskList" }
 func (t *TaskListTool) Category() tools.ToolCategory { return tools.CategoryRead }
 
 func (t *TaskListTool) Description() string {
@@ -188,7 +183,7 @@ type TaskUpdateTool struct {
 	List *TaskList
 }
 
-func (t *TaskUpdateTool) Name() string           { return "TaskUpdate" }
+func (t *TaskUpdateTool) Name() string { return "TaskUpdate" }
 
 func (t *TaskUpdateTool) Category() tools.ToolCategory { return tools.CategoryWrite }
 
@@ -212,9 +207,9 @@ func (t *TaskUpdateTool) Schema() map[string]any {
 					"enum":        []string{"pending", "in_progress", "completed", "deleted"},
 					"description": "New status for the task",
 				},
-				"addBlocks":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Task IDs that this task blocks"},
+				"addBlocks":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Task IDs that this task blocks"},
 				"addBlockedBy": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Task IDs that block this task"},
-				"owner":       map[string]any{"type": "string", "description": "New owner for the task"},
+				"owner":        map[string]any{"type": "string", "description": "New owner for the task"},
 				"metadata": map[string]any{
 					"type":        "object",
 					"description": "Metadata keys to merge. Set a key to null to delete it.",

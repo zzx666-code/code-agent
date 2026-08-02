@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package extractor
 
 import (
@@ -58,9 +53,9 @@ type mockTool struct {
 	exec func(args map[string]any) tools.ToolResult
 }
 
-func (t *mockTool) Name() string                  { return t.name }
-func (t *mockTool) Description() string           { return "mock " + t.name }
-func (t *mockTool) Category() tools.ToolCategory  { return t.cat }
+func (t *mockTool) Name() string                 { return t.name }
+func (t *mockTool) Description() string          { return "mock " + t.name }
+func (t *mockTool) Category() tools.ToolCategory { return t.cat }
 func (t *mockTool) Schema() map[string]any {
 	return map[string]any{
 		"name":         t.name,

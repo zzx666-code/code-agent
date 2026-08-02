@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package tools
 
 import (
@@ -19,7 +14,7 @@ type ExitWorktreeTool struct {
 	RepoRoot string // injected by TUI at startup
 }
 
-func (t *ExitWorktreeTool) Name() string           { return "ExitWorktree" }
+func (t *ExitWorktreeTool) Name() string { return "ExitWorktree" }
 
 func (t *ExitWorktreeTool) Category() ToolCategory { return CategoryCommand }
 

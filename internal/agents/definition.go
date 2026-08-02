@@ -1,9 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
-
 package agents
 
 import (
@@ -180,7 +174,7 @@ func (d *AgentDefinition) ToSpec() SubAgentSpec {
 		Background:           d.Background,
 		Isolation:            d.Isolation,
 		InitialPrompt:        d.InitialPrompt,
-		OmitMewcodeMd:         d.OmitMewcodeMd,
+		OmitMewcodeMd:        d.OmitMewcodeMd,
 		Skills:               d.Skills,
 		Memory:               d.Memory,
 		McpServers:           d.McpServers,
@@ -211,4 +205,3 @@ func (d *AgentDefinition) HasRequiredMcpServers(availableServers []string) bool 
 	}
 	return true
 }
-

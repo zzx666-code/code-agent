@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package skills
 
 import (
@@ -123,17 +118,17 @@ type contentEntry struct {
 // Single-skill installs are tiny (SKILL.md + maybe a few reference files);
 // anything bigger probably means we got a wrong URL or a bad actor.
 const (
-	maxFileSize     = 1 << 20 // 1 MiB per file
-	maxTotalSize    = 8 << 20 // 8 MiB per skill
-	maxFileCount    = 64
+	maxFileSize       = 1 << 20 // 1 MiB per file
+	maxTotalSize      = 8 << 20 // 8 MiB per skill
+	maxFileCount      = 64
 	maxRecursionDepth = 4
-	httpTimeout     = 30 * time.Second
+	httpTimeout       = 30 * time.Second
 )
 
 // fetcher centralises HTTP calls so tests can swap the underlying client
 // and so we apply consistent headers and timeouts.
 type fetcher struct {
-	client *http.Client
+	client  *http.Client
 	apiBase string // "https://api.github.com" — overridable for tests
 }
 

@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package tools
 
 import (
@@ -92,11 +87,11 @@ type BashTool struct {
 	SandboxConfig sandbox.Config  // 沙箱的路径和网络权限配置
 }
 
-func (t *BashTool) Name() string            { return "Bash" }
+func (t *BashTool) Name() string { return "Bash" }
 
-func (t *BashTool) Description() string     { return BashDescription }
+func (t *BashTool) Description() string { return BashDescription }
 
-func (t *BashTool) Category() ToolCategory  { return CategoryCommand }
+func (t *BashTool) Category() ToolCategory { return CategoryCommand }
 
 func (t *BashTool) Schema() map[string]any {
 	return map[string]any{

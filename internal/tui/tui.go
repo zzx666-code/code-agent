@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package tui
 
 import (
@@ -60,11 +55,11 @@ const (
 )
 
 type chatMessage struct {
-	role           string
-	content        string
-	toolGroup      []toolBlockInfo
-	subAgentBlock  *subAgentBlock
-	expanded       bool
+	role          string
+	content       string
+	toolGroup     []toolBlockInfo
+	subAgentBlock *subAgentBlock
+	expanded      bool
 }
 
 type subAgentBlock struct {
@@ -93,16 +88,20 @@ type agentEventMsg struct {
 type agentDoneMsg struct {
 	ch <-chan agent.AgentEvent
 }
-type agentErrMsg struct{ err error }
-type agentReadyMsg struct {
-	ch <-chan agent.AgentEvent
-}
-type mailboxPollMsg struct{}
-type mcpReadyMsg struct{ result mcp.ConnectResult }
-type compactDoneMsg struct {
-	message string
-	err     error
-}
+type (
+	agentErrMsg   struct{ err error }
+	agentReadyMsg struct {
+		ch <-chan agent.AgentEvent
+	}
+)
+type (
+	mailboxPollMsg struct{}
+	mcpReadyMsg    struct{ result mcp.ConnectResult }
+	compactDoneMsg struct {
+		message string
+		err     error
+	}
+)
 
 type ragIndexProgressMsg struct {
 	message string
@@ -144,11 +143,11 @@ type Model struct {
 
 	conversation *conversation.Manager
 
-	chatMessages  []chatMessage
-	toolBlocks    []toolBlockInfo
-	streamBuf     string
-	agentCh       <-chan agent.AgentEvent
-	cancelStream  context.CancelFunc
+	chatMessages []chatMessage
+	toolBlocks   []toolBlockInfo
+	streamBuf    string
+	agentCh      <-chan agent.AgentEvent
+	cancelStream context.CancelFunc
 
 	totalInput  int
 	totalOutput int
@@ -159,19 +158,19 @@ type Model struct {
 	permRespCh   chan<- agent.PermissionResponse
 	permCursor   int
 
-	cmdRegistry    *commands.Registry
-	slashMenuOpen  bool
-	slashMatches   []*commands.Command
-	slashCursor    int
+	cmdRegistry   *commands.Registry
+	slashMenuOpen bool
+	slashMatches  []*commands.Command
+	slashCursor   int
 
-	userScrolled   bool
-	committedUpTo  int
-	bannerPrinted  bool
+	userScrolled  bool
+	committedUpTo int
+	bannerPrinted bool
 
-	atMenuOpen  bool
-	atMatches   []string
-	atCursor    int
-	atPrefix    string
+	atMenuOpen bool
+	atMatches  []string
+	atCursor   int
+	atPrefix   string
 
 	spinner       spinner.Model
 	thinking      bool
@@ -222,15 +221,15 @@ type Model struct {
 	askUserAnswered    map[int]string
 	askUserOnSubmit    bool
 	askUserSubmitIdx   int
-	skillCatalog *skills.Catalog
-	taskMgr      *agents.TaskManager
-	todoList     *todo.TaskList
-	memoryMgr           *memory.Manager
-	memoryExtractor     *extractor.Extractor
-	memoryConsolidator  *consolidation.Consolidator
-	teamMgr         *teams.TeamManager
-	ragStore        *rag.Store
-	ragEmbedder     *rag.Embedder
+	skillCatalog       *skills.Catalog
+	taskMgr            *agents.TaskManager
+	todoList           *todo.TaskList
+	memoryMgr          *memory.Manager
+	memoryExtractor    *extractor.Extractor
+	memoryConsolidator *consolidation.Consolidator
+	teamMgr            *teams.TeamManager
+	ragStore           *rag.Store
+	ragEmbedder        *rag.Embedder
 
 	sandboxDialog         bool                 // 沙箱模式选择对话框是否打开
 	sandboxCursor         int                  // 当前选中的沙箱模式索引
@@ -277,16 +276,16 @@ func New(providers []config.ProviderConfig, mcpConfigs []config.MCPServerConfig,
 	}
 
 	m := Model{
-		providers:    providers,
-		mcpConfigs:   mcpConfigs,
-		hookConfigs:  hookConfigs,
-		sandboxCfg:   sCfg,
-		state:        stateProviderSelect,
-		textarea:     ta,
-		conversation: conversation.NewManager(),
-		registry:     reg,
-		defaultTools: dt,
-		cmdRegistry:  commands.CreateDefaultRegistry(),
+		providers:          providers,
+		mcpConfigs:         mcpConfigs,
+		hookConfigs:        hookConfigs,
+		sandboxCfg:         sCfg,
+		state:              stateProviderSelect,
+		textarea:           ta,
+		conversation:       conversation.NewManager(),
+		registry:           reg,
+		defaultTools:       dt,
+		cmdRegistry:        commands.CreateDefaultRegistry(),
 		spinner:            sp,
 		askUserCh:          askCh,
 		subAgentProgressCh: subProgressCh,
@@ -802,7 +801,6 @@ func (m *Model) registerAgentTools(client llm.Client, providerCfg *config.Provid
 		// ParentChecker is wired below once m.ag.Checker is constructed —
 		// registerAgentTools runs before the main agent's Checker is set.
 	})
-
 }
 
 func (m *Model) initMCPServersCmd() tea.Cmd {
@@ -1392,22 +1390,15 @@ func (m Model) handleChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// ESC during streaming: adopt running sub-agent to background
-	if msg.String() == "escape" && m.streaming && m.agentCh != nil && m.cancelStream != nil {
-		if m.taskMgr != nil {
-			taskID := m.taskMgr.AdoptRunning("manual-background", m.agentCh, m.cancelStream)
-			m.chatMessages = append(m.chatMessages, chatMessage{
-				role:    "system",
-				content: fmt.Sprintf("Agent moved to background (task %s). You will be notified when it completes.", taskID),
-			})
-			m.agentCh = nil
-			m.cancelStream = nil
-			m.finishStreaming()
-			commitText := m.renderMessagesRange(m.committedUpTo, len(m.chatMessages))
-			m.committedUpTo = len(m.chatMessages)
-			if commitText != "" {
-				return m, tea.Println(commitText)
-			}
+	// ESC during streaming: terminate the current turn immediately
+	if msg.String() == "escape" && m.streaming && m.cancelStream != nil {
+		m.cancelStream()
+		m.savePartialResponse()
+		m.finishStreaming()
+		commitText := m.renderMessagesRange(m.committedUpTo, len(m.chatMessages))
+		m.committedUpTo = len(m.chatMessages)
+		if commitText != "" {
+			return m, tea.Println(commitText)
 		}
 		return m, nil
 	}
@@ -1432,7 +1423,7 @@ func (m Model) handleChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				atIdx := strings.LastIndex(text, "@")
 				if atIdx >= 0 {
 					m.textarea.Reset()
-	m.textarea.SetHeight(1)
+					m.textarea.SetHeight(1)
 					m.textarea.InsertString(text[:atIdx] + "@" + selected + " ")
 				}
 				m.atMenuOpen = false
@@ -1467,7 +1458,7 @@ func (m Model) handleChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.slashMatches = nil
 				m.slashCursor = 0
 				m.textarea.Reset()
-	m.textarea.SetHeight(1)
+				m.textarea.SetHeight(1)
 				return m.executeCommand(selected.Name, "")
 			}
 			return m, nil
@@ -1480,7 +1471,7 @@ func (m Model) handleChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.slashCursor < len(m.slashMatches) {
 				selected := m.slashMatches[m.slashCursor]
 				m.textarea.Reset()
-	m.textarea.SetHeight(1)
+				m.textarea.SetHeight(1)
 				m.textarea.InsertString("/" + selected.Name + " ")
 				m.slashMenuOpen = false
 				m.slashMatches = nil
@@ -1519,7 +1510,7 @@ func (m Model) handleChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if strings.HasPrefix(text, "/") {
 			name, args := commands.Parse(text)
 			m.textarea.Reset()
-	m.textarea.SetHeight(1)
+			m.textarea.SetHeight(1)
 			m.slashMenuOpen = false
 			m.slashMatches = nil
 			m.slashCursor = 0
@@ -3130,8 +3121,8 @@ func (m Model) handleAgentEvent(ev agent.AgentEvent) (tea.Model, tea.Cmd) {
 			// Visible tools: show each as individual line
 			for _, tb := range visibleTools {
 				m.chatMessages = append(m.chatMessages, chatMessage{
-					role:    "tool_visible",
-					content: renderToolBlockText(tb),
+					role:      "tool_visible",
+					content:   renderToolBlockText(tb),
 					toolGroup: []toolBlockInfo{tb},
 				})
 			}
@@ -3711,7 +3702,7 @@ func (m Model) renderChatContent() string {
 				}
 			} else {
 				summary := renderToolGroupSummary(msg.toolGroup)
-				sb.WriteString(toolDoneStyle.Render("  "+summary))
+				sb.WriteString(toolDoneStyle.Render("  " + summary))
 				sb.WriteString(lipgloss.NewStyle().Foreground(dimText).Render("  (ctrl+o to expand)"))
 				sb.WriteString("\n")
 			}
@@ -4570,7 +4561,7 @@ func (m *Model) historyUp() {
 	if m.historyIndex < len(m.historyEntries) {
 		m.historyIndex++
 		m.textarea.Reset()
-	m.textarea.SetHeight(1)
+		m.textarea.SetHeight(1)
 		m.textarea.SetValue(m.historyEntries[len(m.historyEntries)-m.historyIndex])
 	}
 }

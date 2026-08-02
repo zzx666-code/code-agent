@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package memory
 
 import (
@@ -32,11 +27,11 @@ const (
 
 // EntrypointTruncation is the result of capping MEMORY.md content.
 type EntrypointTruncation struct {
-	Content           string
-	LineCount         int
-	ByteCount         int
-	WasLineTruncated  bool
-	WasByteTruncated  bool
+	Content          string
+	LineCount        int
+	ByteCount        int
+	WasLineTruncated bool
+	WasByteTruncated bool
 }
 
 // TruncateEntrypointContent caps MEMORY.md content to the line AND byte caps, appending a warning

@@ -1,9 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
-
 package teams
 
 // CoordinatorMode restricts the Lead agent's tools to coordination-only.
@@ -24,12 +18,12 @@ var CoordinatorAllowedTools = map[string]bool{
 	"TaskList":    true,
 	"TaskUpdate":  true,
 
-	"TeamCreate":  true,
-	"TeamDelete":  true,
-	"ReadFile":    true,
-	"Glob":        true,
-	"Grep":        true,
-	"Bash":        true,
+	"TeamCreate": true,
+	"TeamDelete": true,
+	"ReadFile":   true,
+	"Glob":       true,
+	"Grep":       true,
+	"Bash":       true,
 }
 
 // IsCoordinatorTool checks if a tool is allowed in Coordinator Mode.
@@ -50,4 +44,3 @@ func CoordinatorToolFilter(teamMgr *TeamManager, enabled bool) func(name string)
 		return IsCoordinatorTool(name)
 	}
 }
-

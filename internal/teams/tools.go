@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package teams
 
 import (
@@ -15,12 +10,12 @@ import (
 
 // SendMessageTool allows agents to send messages to named teammates.
 type SendMessageTool struct {
-	TeamMgr   *TeamManager
+	TeamMgr    *TeamManager
 	SenderName string
 }
 
-func (t *SendMessageTool) Name() string                  { return "SendMessage" }
-func (t *SendMessageTool) Category() tools.ToolCategory  { return tools.CategoryCommand }
+func (t *SendMessageTool) Name() string                 { return "SendMessage" }
+func (t *SendMessageTool) Category() tools.ToolCategory { return tools.CategoryCommand }
 func (t *SendMessageTool) Description() string {
 	return "Send a message to another named agent in the team. The recipient will see it on their next turn."
 }
@@ -113,8 +108,8 @@ type TeamCreateTool struct {
 	TeamMgr *TeamManager
 }
 
-func (t *TeamCreateTool) Name() string                  { return "TeamCreate" }
-func (t *TeamCreateTool) Category() tools.ToolCategory  { return tools.CategoryCommand }
+func (t *TeamCreateTool) Name() string                 { return "TeamCreate" }
+func (t *TeamCreateTool) Category() tools.ToolCategory { return tools.CategoryCommand }
 func (t *TeamCreateTool) Description() string {
 	return `Create a new team for coordinating multiple agents.
 
@@ -207,9 +202,9 @@ type TeamDeleteTool struct {
 	TeamMgr *TeamManager
 }
 
-func (t *TeamDeleteTool) Name() string                  { return "TeamDelete" }
+func (t *TeamDeleteTool) Name() string { return "TeamDelete" }
 
-func (t *TeamDeleteTool) Category() tools.ToolCategory  { return tools.CategoryCommand }
+func (t *TeamDeleteTool) Category() tools.ToolCategory { return tools.CategoryCommand }
 func (t *TeamDeleteTool) Description() string {
 	return "Delete a team, stopping all its members."
 }

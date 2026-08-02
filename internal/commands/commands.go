@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package commands
 
 import (
@@ -27,24 +22,24 @@ const (
 )
 
 type Context struct {
-	Args            string
-	MemoryList      func() []string
-	MemoryClear     func()
-	TokenCount      func() (input, output int)
+	Args              string
+	MemoryList        func() []string
+	MemoryClear       func()
+	TokenCount        func() (input, output int)
 	PermissionMode    func() string
 	SetPermissionMode func(mode string) error
 	ToolCount         func() int
-	SessionInfo     func() string
-	SkillList       func() []SkillInfo
-	SkillReload     func() int // reload catalog + prompt, returns new skill count
-	MCPInfo         func() string
-	RAGIndex        func(path string) string
-	RAGStatus       func() string
-	RAGClear        func() string
-	RAGSearch       func(query string, topK int) string
-	RAGIndexAsync   func(path string, progress func(msg string)) string
-	WorkDir         string
-	Model           string
+	SessionInfo       func() string
+	SkillList         func() []SkillInfo
+	SkillReload       func() int // reload catalog + prompt, returns new skill count
+	MCPInfo           func() string
+	RAGIndex          func(path string) string
+	RAGStatus         func() string
+	RAGClear          func() string
+	RAGSearch         func(query string, topK int) string
+	RAGIndexAsync     func(path string, progress func(msg string)) string
+	WorkDir           string
+	Model             string
 }
 
 type SkillInfo struct {

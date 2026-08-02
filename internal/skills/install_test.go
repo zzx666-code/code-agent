@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package skills
 
 import (
@@ -114,16 +109,20 @@ func fakeGitHub(t *testing.T) *httptest.Server {
 		switch {
 		case r.URL.Path == "/repos/foo/bar/contents/skills/sample":
 			entries := []contentEntry{
-				{Name: "SKILL.md", Path: "skills/sample/SKILL.md", Type: "file", Size: len(skillMD),
-					Encoding: "base64", Content: base64.StdEncoding.EncodeToString([]byte(skillMD))},
+				{
+					Name: "SKILL.md", Path: "skills/sample/SKILL.md", Type: "file", Size: len(skillMD),
+					Encoding: "base64", Content: base64.StdEncoding.EncodeToString([]byte(skillMD)),
+				},
 				{Name: "references", Path: "skills/sample/references", Type: "dir"},
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(entries)
 		case r.URL.Path == "/repos/foo/bar/contents/skills/sample/references":
 			entries := []contentEntry{
-				{Name: "note.md", Path: "skills/sample/references/note.md", Type: "file", Size: len(noteMD),
-					Encoding: "base64", Content: base64.StdEncoding.EncodeToString([]byte(noteMD))},
+				{
+					Name: "note.md", Path: "skills/sample/references/note.md", Type: "file", Size: len(noteMD),
+					Encoding: "base64", Content: base64.StdEncoding.EncodeToString([]byte(noteMD)),
+				},
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(entries)
@@ -168,8 +167,10 @@ func TestInstallRejectsTreeWithoutSkillMD(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Return a tree containing only an unrelated file.
 		entries := []contentEntry{
-			{Name: "README.md", Path: "x/y/README.md", Type: "file", Size: 4,
-				Encoding: "base64", Content: base64.StdEncoding.EncodeToString([]byte("hi\n"))},
+			{
+				Name: "README.md", Path: "x/y/README.md", Type: "file", Size: 4,
+				Encoding: "base64", Content: base64.StdEncoding.EncodeToString([]byte("hi\n")),
+			},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(entries)

@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package agent
 
 import (
@@ -42,8 +37,8 @@ type Agent struct {
 	// compute the effective window for the compaction threshold. Zero falls
 	// back to the summaryOutputReserve default inside compact.
 	MaxOutputTokens int
-	Checker *permissions.Checker
-	Hooks   *hooks.Engine
+	Checker         *permissions.Checker
+	Hooks           *hooks.Engine
 	// SessionID identifies the on-disk session log this agent appends to. When
 	// set, Layer 2 compaction writes a compact_boundary record into that session
 	// so a later resume can rebuild the compacted state instead of replaying the
@@ -54,8 +49,8 @@ type Agent struct {
 	// ToolNameFilter, when non-nil, drops any tool whose Name returns false from the schemas sent to
 	// the LLM. The filter is consulted at the top of every iteration so callers can flip Coordinator
 	// Mode on or off (e.g., when a team is created/torn down) without restarting the agent.
-	Instructions   string
-	MemoryContent  string
+	Instructions  string
+	MemoryContent string
 	// MemoryRecallCh 非阻塞 memory recall：prefetch 与主 LLM 调用并行，
 	// 工具执行后从 channel 读取并注入
 	MemoryRecallCh <-chan string
@@ -469,7 +464,6 @@ func (a *Agent) emitHook(event hooks.EventName, message string, args map[string]
 		Message:   message,
 	})
 }
-
 
 // filterSchemasByName keeps only the tool schemas whose "name" passes the allow predicate. Used by
 // Coordinator Mode to restrict a Lead agent to coordination-only tools while teammates do the

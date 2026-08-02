@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package worktree
 
 import (
@@ -195,9 +190,9 @@ func copyFileContents(src, dst string) error {
 
 // WorktreeConfig holds worktree-related configuration. Populated from config.yaml or defaults.
 var worktreeConfig = struct {
-	SymlinkDirectories    []string
-	StaleCleanupInterval  int // seconds; 0 = disabled
-	StaleCutoffHours      int // hours; default 720 (30 days)
+	SymlinkDirectories   []string
+	StaleCleanupInterval int // seconds; 0 = disabled
+	StaleCutoffHours     int // hours; default 720 (30 days)
 }{
 	StaleCutoffHours: 720,
 }
@@ -237,4 +232,3 @@ func FindCanonicalGitRoot(startDir string) string {
 	// commonDir points to the main repo's .git; repo root is its parent.
 	return filepath.Dir(commonDir)
 }
-

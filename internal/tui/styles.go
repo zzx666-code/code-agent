@@ -1,9 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
-
 package tui
 
 import "github.com/charmbracelet/lipgloss"
@@ -76,8 +70,8 @@ var (
 			PaddingLeft(4)
 
 	diffRemoveStyle = lipgloss.NewStyle().
-				Foreground(redText).
-				PaddingLeft(4)
+			Foreground(redText).
+			PaddingLeft(4)
 
 	// Error message
 	errorStyle = lipgloss.NewStyle().
@@ -112,4 +106,3 @@ var (
 	normalItemStyle = lipgloss.NewStyle().
 			Foreground(mutedText)
 )
-

@@ -1,8 +1,3 @@
-// 来源：公众号@小林coding
-// 后端八股网站：xiaolincoding.com
-// Agent网站：xiaolinnote.com
-// 简历模版：jianli.xiaolinnote.com
-
 package permissions
 
 import (
@@ -50,10 +45,10 @@ type Decision struct {
 type PermissionMode string
 
 const (
-	ModeDefault      PermissionMode = "default"
-	ModeAcceptEdits  PermissionMode = "acceptEdits"
-	ModePlan         PermissionMode = "plan"
-	ModeBypass       PermissionMode = "bypassPermissions"
+	ModeDefault     PermissionMode = "default"
+	ModeAcceptEdits PermissionMode = "acceptEdits"
+	ModePlan        PermissionMode = "plan"
+	ModeBypass      PermissionMode = "bypassPermissions"
 )
 
 var modeMatrix = map[PermissionMode]map[tools.ToolCategory]DecisionEffect{
