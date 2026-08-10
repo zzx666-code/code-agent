@@ -13,6 +13,7 @@
 | 5 | `e09ce6f` | 2026-07-29 | zzx | Add concurrent race tests for RecoveryState, Store and FileStateCache |
 | 6 | `7c32cae` | 2026-07-30 | zzx | Expand RAG eval dataset to 22 docs / 8 topics / 40 queries with difficulty tiers |
 | 7 | `c487fd5` | 2026-08-02 | zzx | first commit |
+| 8 | `d56644f` | 2026-08-10 | zzx666-code | 添加harness engineering |
 
 ---
 
@@ -85,25 +86,36 @@
 
 ---
 
-## 未提交的改动（当前工作区）
+## 8. d56644f - 添加harness engineering
 
-以下改动已实现但尚未提交（verification gate + 分级挽回机制），详见 `docs/verification-gate-changelog.md`：
+**Date**: 2026-08-10 20:41:08 +0800  |  **Author**: zzx666-code
 
-- `AGENTS.md` (新增) - 项目规范
-- `internal/agent/verdict.go` (新增) - VERDICT 解析器
-- `internal/agent/verdict_test.go` (新增) - 解析器测试
-- `internal/agent/verification_gate_test.go` (新增) - gate 测试
-- `internal/agent/verification_rewind_test.go` (新增) - 挽回测试
-- `internal/agent/agent.go` (修改) - 验证 gate + 分级挽回
-- `internal/agent/events.go` (修改) - LoopComplete.Verified + VerificationEvent
-- `internal/agents/agent_tool.go` (修改) - RunVerification 方法
-- `internal/agents/loader.go` (修改) - 默认启用 verification
-- `internal/agents/loader_test.go` (修改) - 适配默认启用
+实现 harness engineering（驾驭工程）：验评估证闭环 + 失败分级挽回机制。详见 `docs/verification-gate-changelog.md`。
+
+主要改动（31 个文件，+1907/-49）：
+- `AGENTS.md` (新增) - 项目规范（架构、编码标准、PR 规范、测试、配置、agent 规则）
+- `internal/agent/verdict.go` (新增) - VERDICT 解析器（Verdict 枚举 + ParseVerdict + 证据提取）
+- `internal/agent/verdict_test.go` (新增) - 解析器 9 个测试
+- `internal/agent/verification_gate_test.go` (新增) - gate 7 个测试（PASS/FAIL 重试/耗尽/小改动跳过/PARTIAL/shouldVerify/超时）
+- `internal/agent/verification_rewind_test.go` (新增) - 挽回 4 个测试（软重试不回滚/第2次回滚/新文件删除/集成回滚）
+- `internal/agent/agent.go` (修改) - 验证 gate 字段、完成点 gate、分级挽回 handleVerificationFailure、shouldVerify 阈值、pre-task 快照、FileHistory.Save() 修复
+- `internal/agent/events.go` (修改) - LoopComplete 加 Verified/Evidence，新增 VerificationEvent
+- `internal/agents/agent_tool.go` (修改) - RunVerification 导出方法 + buildVerificationPrompt
+- `internal/agents/loader.go` (修改) - 默认启用 verification（包级变量 VerificationEnabled）
+- `internal/agents/loader_test.go` (修改) - 适配默认启用 + 禁用测试
 - `internal/config/config.go` (修改) - EnableVerification 字段
-- `internal/filehistory/filehistory.go` (修改) - Rewind 回滚增强
+- `internal/filehistory/filehistory.go` (修改) - Rewind 增强：回滚编辑文件（version-1 备份恢复）+ 删除新建文件
 - `internal/tui/tui.go` (修改) - 接线 VerificationGate
 - `internal/remote/server.go` (修改) - 接线 VerificationGate
-- `cmd/mewcode/main.go` (修改) - config 接线
-- `.mewcode/config.yaml.example` (修改) - enable_verification 字段
+- `cmd/mewcode/main.go` (修改) - config 接线 agents.VerificationEnabled
+- `.mewcode/config.yaml.example` (新增) - enable_verification: true
+- `internal/llm/judge.go` (新增) - LLM-as-judge（RAG 相关性打分）
+- `internal/rag/pipeline.go` (新增) - RAG 三阶段检索 pipeline
+- `internal/rag/reranker.go` (新增) - cross-encoder rerank
+- `internal/rag/reranker_test.go` (新增) - rerank 测试
+- `internal/llm/anthropic.go`/`openai.go`/`openai_compat.go` (修改) - GetSystemPrompt 方法
+- `internal/tools/rag.go`/`descriptions.go` (修改) - RagSearch 三阶段描述
+- `internal/tools/glob.go` (修改) - 跨平台路径一致性
+- `internal/prompt/sections.go` (修改) - RAG 工具描述更新
 - `docs/git-history.md` (新增) - 本文件
 - `docs/verification-gate-changelog.md` (新增) - 本次改动变更日志
