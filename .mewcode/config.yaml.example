@@ -1,0 +1,44 @@
+providers:
+  - name: anthropic-official
+    protocol: anthropic
+    base_url: https://api.anthropic.com
+    api_key: "your-api-key-here"
+    model: claude-sonnet-4-20250514
+    thinking: true
+
+  # OpenAI provider example
+  # - name: openai-official
+  #   protocol: openai
+  #   base_url: https://api.openai.com/v1
+  #   api_key: "your-api-key-here"
+  #   model: gpt-4o
+
+  # OpenAI-compatible provider with RAG embedding (e.g. 豆包/DeepSeek)
+  # - name: doubao
+  #   protocol: openai-compat
+  #   base_url: https://ark.cn-beijing.volces.com/api/plan/v3
+  #   api_key: "your-api-key-here"
+  #   model: doubao-pro-32k
+  #   embedding_model: doubao-embedding-vision       # RAG embedding 模型
+  #   embedding_url: https://ark.cn-beijing.volces.com/api/plan/v3  # 可选，默认同 base_url
+  #   embedding_api_key: "your-embedding-api-key"    # 可选，默认复用 api_key
+  #   rerank_model: BAAI/bge-reranker-v2-m3          # RAG rerank 模型（cross-encoder 精排，可选）
+  #   rerank_url: https://api.siliconflow.cn/v1      # 可选，可按模型前缀自动推断（BAAI/ 等 → SiliconFlow，rerank- → Voyage）
+  #   rerank_api_key: "your-rerank-api-key"          # 可选，默认复用 api_key
+
+permission_mode: default
+
+mcp_servers:
+  - name: context7
+    command: npx
+    args: ["-y", "@upstash/context7-mcp"]
+
+  # Streamable HTTP example (2025-03-26 spec, default when url is set):
+  # - name: my-http-mcp
+  #   url: https://example.com/mcp
+  #   transport: http   # optional; "http" (default) or "sse"
+  #   headers:
+  #     Authorization: "Bearer ${MY_TOKEN}"
+
+enable_coordinator_mode: false   # 设为 true 后创建 Team 时 Lead 只能调度不能写代码
+enable_verification: true       # 设为 false 禁用验证 gate（任务完成前的自动验证）

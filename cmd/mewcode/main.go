@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"mewcode/internal/agents"
 	"mewcode/internal/config"
 	"mewcode/internal/hooks"
 	"mewcode/internal/remote"
@@ -77,6 +78,9 @@ func main() {
 
 	m := tui.New(cfg.Providers, cfg.MCPServers, validHooks, cfg.Sandbox)
 	m.EnableCoordinatorMode = cfg.EnableCoordinatorMode
+	if cfg.EnableVerification != nil {
+		agents.VerificationEnabled = *cfg.EnableVerification
+	}
 	p := tea.NewProgram(m)
 
 	if _, err := p.Run(); err != nil {

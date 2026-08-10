@@ -234,7 +234,7 @@ func RAGSection() Section {
 ## 工具
 
 - RagIndex(path, recursive?) - 索引文件或目录，工具内部按语言切分 chunk 并 embed 入库
-- RagSearch(query, top_k?=5) - 语义检索，返回 file_path:行号范围 + 内容 + 相似度分数
+- RagSearch(query, top_k?=5) - 语义检索，先粗排 top50 再经 cross-encoder rerank 返回 top_k，返回 file_path:行号范围 + 内容 + 相关性分数
 - RagClear() - 清空索引库
 
 ## 使用规则

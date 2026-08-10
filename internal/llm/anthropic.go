@@ -68,6 +68,10 @@ func (c *anthropicClient) SetSystemPrompt(prompt string) {
 	c.systemPrompt = prompt
 }
 
+func (c *anthropicClient) GetSystemPrompt() string {
+	return c.systemPrompt
+}
+
 func (c *anthropicClient) SetMaxOutputTokens(tokens int) {
 	c.maxOutputTokens = tokens
 }

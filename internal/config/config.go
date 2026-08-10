@@ -41,6 +41,9 @@ type ProviderConfig struct {
 	EmbeddingModel  string `yaml:"embedding_model"`
 	EmbeddingURL    string `yaml:"embedding_url"`
 	EmbeddingAPIKey string `yaml:"embedding_api_key"`
+	RerankModel     string `yaml:"rerank_model"`
+	RerankURL       string `yaml:"rerank_url"`
+	RerankAPIKey    string `yaml:"rerank_api_key"`
 
 	// fetchedContextWindow caches the max_input_tokens auto-pulled from the
 	// provider's /v1/models endpoint (layer 2 of GetContextWindow). Populated
@@ -152,6 +155,22 @@ func (p *ProviderConfig) ResolveEmbeddingAPIKey() string {
 	return os.Getenv(envVar)
 }
 
+// ResolveRerankAPIKey returns the API key for rerank calls.
+// Priority: rerank_api_key > api_key (shared) > env var inferred from protocol.
+func (p *ProviderConfig) ResolveRerankAPIKey() string {
+	if p.RerankAPIKey != "" {
+		return p.RerankAPIKey
+	}
+	if p.APIKey != "" {
+		return p.APIKey
+	}
+	envVar := envKeyMap[p.Protocol]
+	if envVar == "" {
+		return ""
+	}
+	return os.Getenv(envVar)
+}
+
 type MCPServerConfig struct {
 	Name      string            `yaml:"name"`
 	Command   string            `yaml:"command"`
@@ -176,6 +195,9 @@ type AppConfig struct {
 	Hooks                 []hooks.Hook      `yaml:"hooks"`
 	Sandbox               SandboxConfig     `yaml:"sandbox"`
 	EnableCoordinatorMode bool              `yaml:"enable_coordinator_mode"`
+	// EnableVerification gates the verification sub-agent and completion gate.
+	// nil (unset) defaults to enabled; set explicitly to false to disable.
+	EnableVerification *bool `yaml:"enable_verification"`
 }
 
 func loadSingleFile(path string) (*AppConfig, error) {

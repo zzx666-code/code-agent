@@ -159,7 +159,11 @@ mewcode/
 ### 1. 编译
 
 ```bash
+# Linux / macOS
 go build -o mewcode ./cmd/mewcode
+
+# Windows（必须带 .exe 扩展名，否则系统无法识别为可执行文件）
+go build -o mewcode.exe ./cmd/mewcode
 ```
 
 ### 2. 配置
@@ -185,13 +189,20 @@ mcp_servers:
 
 ```bash
 # 交互式 TUI
+# Linux / macOS
 ./mewcode
+# Windows
+.\mewcode.exe
 
 # 非交互模式
+# Linux / macOS
 ./mewcode -p "解释这个项目"
+# Windows
+.\mewcode.exe -p "解释这个项目"
 
 # 远程模式（启动 WebSocket 服务）
+# Linux / macOS
 ./mewcode --remote :18888
+# Windows
+.\mewcode.exe --remote :18888
 ```
-
-我是小喵

@@ -230,6 +230,7 @@ type Model struct {
 	teamMgr            *teams.TeamManager
 	ragStore           *rag.Store
 	ragEmbedder        *rag.Embedder
+	ragReranker        *rag.Reranker
 
 	sandboxDialog         bool                 // 沙箱模式选择对话框是否打开
 	sandboxCursor         int                  // 当前选中的沙箱模式索引
@@ -734,12 +735,13 @@ func (m *Model) registerAgentTools(client llm.Client, providerCfg *config.Provid
 
 	m.memoryMgr = memory.NewManager(wd)
 
-	ragStore, ragEmbedder, ragErr := tools.NewRAGStore(wd, providerCfg)
+	ragStore, ragEmbedder, ragReranker, ragErr := tools.NewRAGStore(wd, providerCfg)
 	if ragErr == nil {
 		m.ragStore = ragStore
 		m.ragEmbedder = ragEmbedder
+		m.ragReranker = ragReranker
 		m.registry.Register(&tools.RagIndexTool{Store: ragStore, Embedder: ragEmbedder})
-		m.registry.Register(&tools.RagSearchTool{Store: ragStore, Embedder: ragEmbedder})
+		m.registry.Register(&tools.RagSearchTool{Store: ragStore, Embedder: ragEmbedder, Reranker: ragReranker, Client: client, FinalTopK: 5})
 		m.registry.Register(&tools.RagClearTool{Store: ragStore})
 	}
 
@@ -1117,6 +1119,10 @@ func (m *Model) installMemoryExtractor(ag *agent.Agent, wd, protocol string) *ex
 	ag.OnLoopComplete = func(_ *conversation.Manager) {
 		_ = extr.Execute(context.Background())
 		consolidator.MaybeRun(context.Background())
+	}
+
+	if at, ok := m.registry.Get("Agent").(*agents.AgentTool); ok {
+		ag.VerificationGate = at.RunVerification
 	}
 	return extr
 }
@@ -1835,7 +1841,7 @@ func (m Model) buildCommandContext(args string) *commands.Context {
 			if m.ragStore == nil || m.ragEmbedder == nil {
 				return "RAG 未初始化：请在 .mewcode/config.yaml 中配置 embedding_model"
 			}
-			tool := &tools.RagSearchTool{Store: m.ragStore, Embedder: m.ragEmbedder}
+			tool := &tools.RagSearchTool{Store: m.ragStore, Embedder: m.ragEmbedder, Reranker: m.ragReranker, Client: m.client, FinalTopK: topK}
 			res := tool.Execute(context.Background(), map[string]any{"query": query, "top_k": topK})
 			if res.IsError {
 				return "检索失败：" + res.Output

@@ -24,6 +24,7 @@ import (
 const (
 	maxTokensCeiling          = 64000
 	maxOutputTokensRecoveries = 3
+	maxVerifyRetries          = 2
 )
 
 type Agent struct {
@@ -61,7 +62,14 @@ type Agent struct {
 	// loop. The callback receives the live conversation — do not mutate it from another goroutine.
 	OnLoopComplete  func(conv *conversation.Manager)
 	FileHistory     *filehistory.History
-	compactTracking compact.AutoCompactTrackingState
+	// VerificationGate, when non-nil, is invoked synchronously at the completion
+	// point (no tool calls remaining) for non-trivial changes. A FAIL verdict
+	// triggers graded recovery (soft retry -> rewind+retry -> rewind+terminate)
+	// via handleVerificationFailure. PASS/PARTIAL proceed to LoopComplete.
+	VerificationGate func(ctx context.Context, conv *conversation.Manager) (Verdict, string, error)
+	verifyRetries    int
+	preTaskSnapshot  int
+	compactTracking  compact.AutoCompactTrackingState
 	// ReplacementState carries the per-conversation-thread tool-result
 	// decision log across iterations. Lazily created on first Run; forks
 	// inherit a Clone() so they share the parent's frozen decisions but do
@@ -168,6 +176,12 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 		a.emitHook(hooks.EventSessionStart, "", nil)
 
 		conv.InjectLongTermMemory(a.Instructions, a.MemoryContent)
+
+		if a.FileHistory != nil {
+			a.FileHistory.MakeSnapshot(conv.Len(), "pre-task")
+			a.preTaskSnapshot = len(a.FileHistory.GetSnapshots()) - 1
+			_ = a.FileHistory.Save()
+		}
 
 		var totalInput, totalOutput int
 		consecutiveUnknown := 0
@@ -352,21 +366,45 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				outputRecoveries = 0
 			}
 
-			if len(toolCalls) == 0 {
-				conv.AddAssistantFull(text, thinkingBlocks, nil)
-				if a.FileHistory != nil {
-					summary := text
-					if len(summary) > 60 {
-						summary = summary[:60] + "..."
+		if len(toolCalls) == 0 {
+			conv.AddAssistantFull(text, thinkingBlocks, nil)
+
+			verified := true
+			var verifyEvidence string
+			if a.VerificationGate != nil && a.shouldVerify(conv) {
+				verdict, evidence, verr := a.VerificationGate(ctx, conv)
+				if verr == nil {
+					verifyEvidence = evidence
+					ch <- VerificationEvent{
+						Verdict:  verdict.String(),
+						Evidence: evidence,
+						Retry:    a.verifyRetries,
+						MaxRetry: maxVerifyRetries,
 					}
-					a.FileHistory.MakeSnapshot(conv.Len(), summary)
+					if verdict == VerdictFail && a.verifyRetries < maxVerifyRetries {
+						a.verifyRetries++
+						a.handleVerificationFailure(conv, evidence)
+						continue
+					}
+					verified = verdict != VerdictFail
 				}
-				ch <- LoopComplete{TotalTurns: iteration}
-				if a.OnLoopComplete != nil {
-					go a.OnLoopComplete(conv)
-				}
-				return
 			}
+			a.verifyRetries = 0
+
+			if a.FileHistory != nil {
+				summary := text
+				if len(summary) > 60 {
+					summary = summary[:60] + "..."
+				}
+				a.FileHistory.MakeSnapshot(conv.Len(), summary)
+				_ = a.FileHistory.Save()
+			}
+			ch <- LoopComplete{TotalTurns: iteration, Verified: verified, Evidence: verifyEvidence}
+			if a.OnLoopComplete != nil {
+				go a.OnLoopComplete(conv)
+			}
+			return
+		}
 
 			var toolUses []conversation.ToolUseBlock
 			for _, tc := range toolCalls {
@@ -477,6 +515,42 @@ func filterSchemasByName(schemas []map[string]any, allow func(name string) bool)
 		}
 	}
 	return out
+}
+
+// handleVerificationFailure implements graded recovery after a FAIL verdict.
+// First failure (verifyRetries==1): soft retry - inject evidence, let the agent
+// fix on the current (already-mutated) files. Second failure (verifyRetries==2):
+// rewind to the pre-task snapshot then inject evidence so the agent redoes the
+// work from a clean state. Exhausted retries (>=maxVerifyRetries) do not call
+// this - the loop completes with Verified=false.
+func (a *Agent) handleVerificationFailure(conv *conversation.Manager, evidence string) {
+	msg := "Verification FAILED. Evidence:\n" + evidence +
+		"\n\nFix the issues above and complete the task again. Do not repeat the same mistakes."
+	if a.verifyRetries >= 2 && a.FileHistory != nil {
+		if _, err := a.FileHistory.Rewind(a.preTaskSnapshot); err == nil {
+			_ = a.FileHistory.Save()
+			msg = "Files have been rolled back to the pre-task snapshot. " + msg
+		}
+	}
+	conv.AddUserMessage(msg)
+}
+
+// shouldVerify decides whether the verification gate runs for this completion.
+// Only non-trivial changes (3+ file-edit tool calls in the conversation) are
+// verified, matching the verificationWhenToUse guidance and avoiding the cost
+// of a full sub-agent run for tiny edits.
+func (a *Agent) shouldVerify(conv *conversation.Manager) bool {
+	const verifyThreshold = 3
+	edits := 0
+	for _, msg := range conv.GetMessages() {
+		for _, tu := range msg.ToolUses {
+			switch tu.ToolName {
+			case "EditFile", "WriteFile", "NotebookEdit":
+				edits++
+			}
+		}
+	}
+	return edits >= verifyThreshold
 }
 
 // handleStreamError returns (retry, compacted): retry signals the caller to

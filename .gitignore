@@ -9,9 +9,9 @@ config.yaml
 vendor/
 .idea/
 .vscode/
-.mewcode/
+.mewcode/*
+!.mewcode/config.yaml.example
 .claude/
 CLAUDE.md
-docs/
 .DS_Store
 mewcode.exe

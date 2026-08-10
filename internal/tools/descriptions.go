@@ -76,11 +76,15 @@ Usage notes:
 - Requires embedding_model to be configured in .mewcode/config.yaml.
 - Re-indexing the same path replaces all previous entries (full rebuild).`
 
-const RagSearchDescription = `Semantic search over indexed chunks using vector similarity.
+const RagSearchDescription = `Semantic search over indexed chunks using a three-stage retrieval pipeline.
 
 Usage notes:
-- Query in natural language; returns top_k (default 5) most similar chunks.
-- Each result includes file_path, line range, content, and similarity score.
+- Query in natural language; returns top_k (default 5) most relevant chunks.
+- Stage 1 (coarse): vector-similarity retrieval fetches up to 50 candidates.
+- Stage 2 (rerank): if a reranker is configured (rerank_model), a cross-encoder re-scores the candidates.
+- Stage 3 (LLM judge): an LLM re-evaluates the candidates against the query and selects the most relevant ones.
+- Each result includes file_path, line range, content, and the final relevance score.
+- If any stage fails, the pipeline falls back to the best available prior stage's results.
 - Use this when grep/glob cannot find what you need (semantic rather than exact match).
 - Requires the target files to have been indexed via RagIndex first.`
 

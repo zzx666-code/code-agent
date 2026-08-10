@@ -92,6 +92,61 @@ type AgentTool struct {
 func (t *AgentTool) Name() string                 { return "Agent" }
 func (t *AgentTool) Category() tools.ToolCategory { return tools.CategoryCommand }
 
+// RunVerification synchronously spawns the verification sub-agent against the
+// given conversation, parses the VERDICT line, and returns the verdict plus
+// evidence summary. Wired onto agent.Agent.VerificationGate by the TUI/remote
+// so the main loop can gate completion on verification results.
+func (t *AgentTool) RunVerification(ctx context.Context, conv *conversation.Manager) (agent.Verdict, string, error) {
+	prompt := buildVerificationPrompt(conv)
+	result := t.runSync(ctx, verificationSpec, "verification", prompt, "", "", "")
+	v, evidence := agent.ParseVerdict(result.Output)
+	return v, evidence, nil
+}
+
+// buildVerificationPrompt extracts the original task and changed-file list from
+// the conversation so the verification sub-agent knows what to verify.
+func buildVerificationPrompt(conv *conversation.Manager) string {
+	var taskDesc string
+	for i := len(conv.GetMessages()) - 1; i >= 0; i-- {
+		msg := conv.GetMessages()[i]
+		if msg.Role == "user" && msg.Content != "" && !strings.HasPrefix(msg.Content, "<system-reminder>") {
+			taskDesc = msg.Content
+			break
+		}
+	}
+	if taskDesc == "" {
+		taskDesc = "(no original task description found)"
+	}
+
+	seen := make(map[string]bool)
+	var changed []string
+	for _, msg := range conv.GetMessages() {
+		for _, tu := range msg.ToolUses {
+			if tu.ToolName == "EditFile" || tu.ToolName == "WriteFile" || tu.ToolName == "NotebookEdit" {
+				if p, ok := tu.Arguments["file_path"].(string); ok && !seen[p] {
+					seen[p] = true
+					changed = append(changed, p)
+				}
+			}
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Verify the following implementation work.\n\n=== ORIGINAL TASK ===\n")
+	sb.WriteString(taskDesc)
+	sb.WriteString("\n\n=== FILES CHANGED ===\n")
+	if len(changed) == 0 {
+		sb.WriteString("(no file edits detected)\n")
+	} else {
+		for _, p := range changed {
+			sb.WriteString("- " + p + "\n")
+		}
+	}
+	sb.WriteString("\nRun the build, tests, and linters. Try to break the implementation. End with a VERDICT line.\n")
+	return sb.String()
+}
+
+
 func (t *AgentTool) Description() string {
 	desc := `Launch a sub-agent to handle a complex task. Each sub-agent runs independently with its own context. The sub-agent cannot see the current conversation.
 

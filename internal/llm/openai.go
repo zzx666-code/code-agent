@@ -56,6 +56,10 @@ func (c *openaiClient) SetSystemPrompt(prompt string) {
 	c.systemPrompt = prompt
 }
 
+func (c *openaiClient) GetSystemPrompt() string {
+	return c.systemPrompt
+}
+
 func (c *openaiClient) SetMaxOutputTokens(tokens int) {
 	c.maxOutputTokens = tokens
 }

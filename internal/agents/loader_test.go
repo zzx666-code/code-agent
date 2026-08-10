@@ -113,7 +113,7 @@ func TestLoaderBuiltinsAvailable(t *testing.T) {
 	loader := NewAgentLoader(t.TempDir())
 	loader.LoadAll()
 
-	expected := []string{"explore", "general-purpose", "plan"}
+	expected := []string{"explore", "general-purpose", "plan", "verification"}
 	names := loader.ListNames()
 	if len(names) != len(expected) {
 		t.Fatalf("got %d agents, want %d: %v", len(names), len(expected), names)
@@ -130,6 +130,19 @@ func TestLoaderBuiltinsAvailable(t *testing.T) {
 	}
 	if gp.Source != "built-in" {
 		t.Errorf("Source = %q, want %q", gp.Source, "built-in")
+	}
+}
+
+func TestLoaderVerificationDisabled(t *testing.T) {
+	prev := VerificationEnabled
+	VerificationEnabled = false
+	defer func() { VerificationEnabled = prev }()
+
+	loader := NewAgentLoader(t.TempDir())
+	loader.LoadAll()
+
+	if loader.Get("verification") != nil {
+		t.Error("verification agent should not be registered when VerificationEnabled=false")
 	}
 }
 

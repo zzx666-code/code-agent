@@ -53,6 +53,10 @@ func (c *openaiCompatClient) SetSystemPrompt(prompt string) {
 	c.systemPrompt = prompt
 }
 
+func (c *openaiCompatClient) GetSystemPrompt() string {
+	return c.systemPrompt
+}
+
 func (c *openaiCompatClient) Stream(ctx context.Context, conv *conversation.Manager, toolSchemas []map[string]any) (<-chan StreamEvent, <-chan error) {
 	events := make(chan StreamEvent, 64)
 	errs := make(chan error, 1)

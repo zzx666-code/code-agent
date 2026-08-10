@@ -75,13 +75,16 @@ func (t *GlobTool) Execute(_ context.Context, args map[string]any) ToolResult {
 		matched := false
 		if recursive {
 			// `**/<basePattern>` — match basePattern against base name at any depth.
+			// Use forward slashes in output for cross-platform consistency.
 			matched, _ = filepath.Match(basePattern, filepath.Base(path))
+			rel = filepath.ToSlash(rel)
 		} else {
 			matched, _ = filepath.Match(pattern, filepath.Base(path))
 			if !matched {
 				matched, _ = filepath.Match(pattern, rel)
 			}
 		}
+		rel = filepath.ToSlash(rel)
 		if matched {
 			matches = append(matches, rel)
 		}

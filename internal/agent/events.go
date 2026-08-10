@@ -22,13 +22,23 @@ type ToolResultEvent struct {
 }
 type (
 	TurnComplete struct{ Turn int }
-	LoopComplete struct{ TotalTurns int }
-	UsageEvent   struct{ InputTokens, OutputTokens int }
-	ErrorEvent   struct{ Message string }
+	LoopComplete struct {
+		TotalTurns int
+		Verified   bool
+		Evidence   string
+	}
+	UsageEvent struct{ InputTokens, OutputTokens int }
+	ErrorEvent struct{ Message string }
 	CompactEvent struct{ Message string }
-	RetryEvent   struct {
+	RetryEvent struct {
 		Reason string
 		Wait   time.Duration
+	}
+	VerificationEvent struct {
+		Verdict  string
+		Evidence string
+		Retry    int
+		MaxRetry int
 	}
 )
 
@@ -62,6 +72,8 @@ func (CompactEvent) agentEvent() {}
 
 func (RetryEvent) agentEvent()             {}
 func (PermissionRequestEvent) agentEvent() {}
+
+func (VerificationEvent) agentEvent() {}
 
 type AskUserQuestionEvent struct {
 	Questions  []map[string]any

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"mewcode/internal/config"
+	"mewcode/internal/llm"
 	"mewcode/internal/rag"
 )
 
@@ -130,8 +131,11 @@ func trimPathQuotes(s string) string {
 }
 
 type RagSearchTool struct {
-	Store    *rag.Store
-	Embedder *rag.Embedder
+	Store     *rag.Store
+	Embedder  *rag.Embedder
+	Reranker  *rag.Reranker
+	Client    llm.Client // optional: when set, an LLM re-judges the candidates
+	FinalTopK int
 }
 
 func (t *RagSearchTool) Name() string           { return "RagSearch" }
@@ -168,21 +172,82 @@ func (t *RagSearchTool) Execute(ctx context.Context, args map[string]any) ToolRe
 	if t.Store == nil || t.Embedder == nil {
 		return ToolResult{Output: "Error: RAG not initialized (embedding_model not configured)", IsError: true}
 	}
-	topK := intArg(args, "top_k", 5)
+	finalTopK := t.FinalTopK
+	if finalTopK <= 0 {
+		finalTopK = 5
+	}
+	// User-facing top_k parameter; if not provided, default to finalTopK.
+	topK := intArg(args, "top_k", finalTopK)
 	if topK < 1 {
-		topK = 5
+		topK = finalTopK
 	}
 
-	queryVec, _, err := t.Embedder.EmbedOne(ctx, query)
-	if err != nil {
-		return ToolResult{Output: fmt.Sprintf("Error embedding query: %s", err), IsError: true}
+	// Two-stage retrieval pipeline. Subagent A (coarse) and subagent B
+	// (rerank) run as concurrent goroutines but B depends on A's output, so
+	// they are connected by a channel. The final LLM judge runs after both
+	// complete; on any failure it falls back to whatever stage succeeded.
+	coarseTopK := 50
+	if coarseTopK < topK {
+		coarseTopK = topK
 	}
-	results, err := t.Store.Search(ctx, queryVec, topK)
-	if err != nil {
-		return ToolResult{Output: fmt.Sprintf("Error searching: %s", err), IsError: true}
+
+	// Stage 1 (subagent A): coarse vector retrieval.
+	type coarseResult struct {
+		results []rag.SearchResult
+		err     error
 	}
-	if len(results) == 0 {
+	coarseCh := make(chan coarseResult, 1)
+	go func() {
+		defer close(coarseCh)
+		r, err := rag.CoarseRetrieve(ctx, t.Store, t.Embedder, query, coarseTopK)
+		coarseCh <- coarseResult{results: r, err: err}
+	}()
+
+	// Wait for coarse stage.
+	cr := <-coarseCh
+	if cr.err != nil {
+		return ToolResult{Output: fmt.Sprintf("Error in coarse retrieval: %s", cr.err), IsError: true}
+	}
+	if len(cr.results) == 0 {
 		return ToolResult{Output: "No results found. Use RagIndex to index files first."}
+	}
+
+	// Stage 2 (subagent B): cross-encoder rerank over coarse candidates.
+	type rerankResult struct {
+		results []rag.SearchResult
+		err     error
+	}
+	rerankCh := make(chan rerankResult, 1)
+	go func() {
+		defer close(rerankCh)
+		r, err := rag.RerankPass(ctx, t.Reranker, query, cr.results, topK)
+		rerankCh <- rerankResult{results: r, err: err}
+	}()
+
+	rr := <-rerankCh
+	candidates := rr.results
+	// If rerank failed, fall back to coarse results truncated to topK.
+	if rr.err != nil || len(candidates) == 0 {
+		candidates = cr.results
+		if len(candidates) > topK {
+			candidates = candidates[:topK]
+		}
+	}
+
+	// Stage 3 (LLM judge): let the model re-evaluate the candidates against
+	// the query and pick the most relevant ones. Falls back to the
+	// post-rerank candidates on any failure.
+	results := candidates
+	if t.Client != nil {
+		judged, err := t.llmJudge(ctx, query, candidates, topK)
+		if err == nil && len(judged) > 0 {
+			results = judged
+		}
+		// On error: silent fallback to rerank/coarse results.
+	}
+
+	if len(results) > topK {
+		results = results[:topK]
 	}
 
 	var sb strings.Builder
@@ -193,6 +258,61 @@ func (t *RagSearchTool) Execute(ctx context.Context, args map[string]any) ToolRe
 		sb.WriteString("\n---\n")
 	}
 	return ToolResult{Output: sb.String()}
+}
+
+// llmJudge asks the LLM to re-evaluate candidates against the query and returns
+// the LLM-selected most-relevant candidates, ordered by the LLM's score. The
+// returned slice preserves the original SearchResult content but reorders
+// candidates per the LLM verdict, dropping any the LLM marked irrelevant.
+func (t *RagSearchTool) llmJudge(ctx context.Context, query string, candidates []rag.SearchResult, topK int) ([]rag.SearchResult, error) {
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+	// Cap the candidate count sent to the LLM to keep the prompt bounded.
+	// The rerank stage already narrowed to ~topK, but when reranker is nil
+	// candidates may be as large as coarseTopK (50). Truncate to 15 for the
+	// judge prompt.
+	judgeCands := candidates
+	if len(judgeCands) > 15 {
+		judgeCands = judgeCands[:15]
+	}
+
+	jc := make([]llm.JudgeCandidate, len(judgeCands))
+	for i, r := range judgeCands {
+		jc[i] = llm.JudgeCandidate{
+			Index:    i,
+			FilePath: fmt.Sprintf("%s:%d-%d", r.FilePath, r.StartLine, r.EndLine),
+			Content:  r.Content,
+		}
+	}
+
+	verdicts, err := llm.JudgeRerankResults(ctx, t.Client, query, jc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Map LLM verdicts back to SearchResults, keeping only relevant ones and
+	// ordering by the LLM's score (JudgeRerankResults already sorts desc).
+	out := make([]rag.SearchResult, 0, len(verdicts))
+	for _, v := range verdicts {
+		if !v.Relevant {
+			continue
+		}
+		if v.Index < 0 || v.Index >= len(judgeCands) {
+			continue
+		}
+		c := judgeCands[v.Index]
+		c.Score = float32(v.Score)
+		out = append(out, c)
+	}
+	if len(out) == 0 {
+		// LLM marked nothing relevant - fall back to input order.
+		return nil, fmt.Errorf("llm judge: no relevant candidates")
+	}
+	if len(out) > topK {
+		out = out[:topK]
+	}
+	return out, nil
 }
 
 type RagClearTool struct {
@@ -224,18 +344,29 @@ func (t *RagClearTool) Execute(ctx context.Context, args map[string]any) ToolRes
 	return ToolResult{Output: "索引已清空"}
 }
 
-func NewRAGStore(baseDir string, providerCfg *config.ProviderConfig) (*rag.Store, *rag.Embedder, error) {
+func NewRAGStore(baseDir string, providerCfg *config.ProviderConfig) (*rag.Store, *rag.Embedder, *rag.Reranker, error) {
 	store, err := rag.NewStore(baseDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if providerCfg == nil || providerCfg.EmbeddingModel == "" {
-		return store, nil, nil
+		return store, nil, nil, nil
 	}
 	embedder, err := rag.NewEmbedder(providerCfg)
 	if err != nil {
 		store.Close()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return store, embedder, nil
+	var reranker *rag.Reranker
+	if providerCfg.RerankModel != "" {
+		apiKey := providerCfg.ResolveRerankAPIKey()
+		if apiKey != "" {
+			reranker, err = rag.NewReranker(apiKey, providerCfg.RerankModel, providerCfg.RerankURL)
+			if err != nil {
+				// Non-fatal: keep RAG usable even if reranker misconfigured.
+				reranker = nil
+			}
+		}
+	}
+	return store, embedder, reranker, nil
 }

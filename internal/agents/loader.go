@@ -30,14 +30,19 @@ func NewAgentLoader(workDir string) *AgentLoader {
 	}
 }
 
-// getBuiltinSpecs Verification is feature-gated upstream (`feature('VERIFICATION_AGENT') && `);
-// locally that's a MEWCODE_VERIFICATION_AGENT env var.
+// VerificationEnabled gates whether the built-in verification sub-agent is
+// registered. Defaults to true (verification gate on); config.yaml's
+// enable_verification can turn it off. Set by the TUI after loading config.
+var VerificationEnabled = true
+
+// getBuiltinSpecs Verification is gated by the package-level VerificationEnabled
+// flag (default true, controlled by config.yaml enable_verification).
 func getBuiltinSpecs() map[string]SubAgentSpec {
 	result := make(map[string]SubAgentSpec, len(BuiltinSpecs)+1)
 	for name, spec := range BuiltinSpecs {
 		result[name] = spec
 	}
-	if os.Getenv("MEWCODE_VERIFICATION_AGENT") == "true" {
+	if VerificationEnabled {
 		result[VerificationAgentType] = verificationSpec
 	}
 	return result

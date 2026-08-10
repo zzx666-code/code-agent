@@ -144,13 +144,41 @@ func (h *History) Rewind(snapshotIndex int) ([]string, error) {
 		}
 	}
 
+	// Delete or restore files tracked during the task but absent from the target
+	// snapshot's Backups (the snapshot predates their first TrackEdit). For each,
+	// try the version-1 backup (captured by the first TrackEdit call, i.e. the
+	// pre-edit state) to restore the original content; if no version-1 backup
+	// exists the file was created during the task and must be deleted.
+	for path := range h.trackedFiles {
+		if _, existed := target.Backups[path]; existed {
+			continue
+		}
+		firstBackup := filepath.Join(h.sessionDir, backupName(path, 1))
+		if data, err := os.ReadFile(firstBackup); err == nil {
+			if currentData, _ := os.ReadFile(path); string(currentData) != string(data) {
+				_ = os.MkdirAll(filepath.Dir(path), 0o755)
+				if writeErr := os.WriteFile(path, data, 0o644); writeErr == nil {
+					changed = append(changed, path)
+				}
+			}
+		} else {
+			if _, statErr := os.Stat(path); statErr == nil {
+				_ = os.Remove(path)
+				changed = append(changed, path)
+			}
+		}
+	}
+
 	// Truncate snapshots: remove everything after the target
 	h.snapshots = h.snapshots[:snapshotIndex+1]
 
-	// Reset tracked file versions to the snapshot's versions
+	// Reset tracked file versions to the snapshot's versions; drop paths not in
+	// the snapshot so future TrackEdit calls start clean.
+	newTracked := make(map[string]int, len(target.Backups))
 	for path, backup := range target.Backups {
-		h.trackedFiles[path] = backup.Version
+		newTracked[path] = backup.Version
 	}
+	h.trackedFiles = newTracked
 
 	return changed, nil
 }

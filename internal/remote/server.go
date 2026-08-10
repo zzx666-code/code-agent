@@ -996,6 +996,9 @@ func installMemExtractor(ag *agent.Agent, wd, protocol string, client llm.Client
 	ag.OnLoopComplete = func(_ *conversation.Manager) {
 		_ = extr.Execute(context.Background())
 	}
+	if at, ok := registry.Get("Agent").(*agents.AgentTool); ok {
+		ag.VerificationGate = at.RunVerification
+	}
 	return extr
 }
 
