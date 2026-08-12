@@ -46,7 +46,12 @@ mewcode/
 │   │   ├── openai_compat.go     #   OpenAI 兼容 Chat Completions API
 │   │   ├── model_resolver.go
 │   │   ├── errors.go
-│   │   └── events.go
+│   │   ├── events.go
+│   │   └── metered.go           #   LLM 调用计量中间件
+│   ├── metrics/                 # 性能指标采集
+│   │   ├── metrics.go           #   指标接口与注册（63 个指标）
+│   │   ├── noop.go              #   空实现（默认零开销）
+│   │   └── prometheus.go        #   Prometheus 实现 + Go runtime collector
 │   ├── mcp/                     # MCP Server 管理
 │   │   └── mcp.go
 │   ├── memory/                  # 记忆系统
@@ -148,6 +153,18 @@ mewcode/
 │   ├── skills/
 │   ├── memory/
 │   └── teams/
+├── observability/               # 监控与可视化
+│   ├── docker-compose.yml       #   Prometheus + Grafana 编排
+│   ├── prometheus/
+│   │   └── prometheus.yml       #   抓取配置
+│   └── grafana/
+│       ├── dashboards/
+│       │   └── mewcode-overview.json  # 预置 Dashboard（24 个面板）
+│       └── provisioning/
+│           ├── datasources/
+│           │   └── prometheus.yml     # 数据源自动配置
+│           └── dashboards/
+│               └── mewcode.yml        # Dashboard 自动加载
 ├── go.mod
 ├── go.sum
 ├── MEWCODE.md
@@ -205,4 +222,67 @@ mcp_servers:
 ./mewcode --remote :18888
 # Windows
 .\mewcode.exe --remote :18888
+```
+
+## 性能监控与可视化
+
+MewCode 内置 Prometheus 指标采集和 Grafana 可视化，覆盖 6 个层级共 63 个指标：
+
+| 层级 | 指标 | 说明 |
+|---|---|---|
+| **请求层** | `agent_requests_total` `agent_active_tasks` `agent_task_duration_seconds` | 请求计数、活跃任务、任务耗时 |
+| **Agent 层** | `agent_steps_total` `agent_step_duration_seconds` `agent_max_steps_reached_total` `agent_task_timeout_total` | 步骤计数、轮次延迟、步数上限、超时 |
+| **LLM 层** | `agent_llm_requests_total` `agent_llm_errors_total` `agent_llm_duration_seconds` `agent_llm_input_tokens_total` `agent_llm_output_tokens_total` `agent_llm_cost_total` | LLM 调用、错误、延迟、Token（输入/输出）、成本 |
+| **Tool 层** | `agent_tool_calls_total` `agent_tool_errors_total` `agent_tool_duration_seconds` | 工具调用、错误、延迟 |
+| **Coding 层** | `agent_files_modified_total` `agent_code_edits_total` `agent_command_executions_total` `agent_build_total` `agent_build_success_total` `agent_tests_total` `agent_tests_passed_total` `agent_tests_failed_total` | 文件修改、代码编辑、命令执行、构建、测试 |
+| **资源层** | `go_goroutines` `go_memstats_alloc_bytes` `go_gc_duration_seconds` `process_cpu_seconds_total` `process_resident_memory_bytes` | Goroutine、内存、GC、CPU、RSS |
+
+### 启用监控
+
+在 `.mewcode/config.yaml` 中添加：
+
+```yaml
+observability:
+  metrics:
+    enabled: true
+    path: /metrics
+  health:
+    enabled: true
+```
+
+### 启动监控栈
+
+```bash
+# 启动 Prometheus + Grafana（Docker Compose）
+cd observability
+docker compose up -d
+
+# 启动 MewCode（远程模式，暴露 /metrics 端点）
+./mewcode --remote :18888
+```
+
+### 访问
+
+| 服务 | 地址 | 登录 |
+|---|---|---|
+| Grafana | http://localhost:3000 | admin / admin |
+| Prometheus | http://localhost:9090 | 无需登录 |
+| MewCode Web UI | http://localhost:18888 | 无需登录 |
+| 指标端点 | http://localhost:18888/metrics | 无需登录 |
+| 健康检查 | http://localhost:18888/healthz | 无需登录 |
+| pprof 调试 | http://localhost:18888/debug/pprof/ | 无需登录 |
+
+Grafana Dashboard 已预置（24 个面板），打开 http://localhost:3000/d/mewcode-overview 即可查看。
+
+### 指标示例
+
+```
+agent_requests_total{outcome="success"}              # 请求成功数
+agent_llm_cost_total{provider,model}                 # LLM 累计成本（美元）
+agent_llm_tokens_total{type="input|output|cache_read"} # Token 消耗
+agent_files_modified_total                            # 修改文件数
+agent_build_total                                     # 构建次数
+agent_command_executions_total                        # 命令执行数
+go_goroutines                                         # Goroutine 数
+process_resident_memory_bytes                         # 进程内存
 ```
