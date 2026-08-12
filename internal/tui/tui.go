@@ -24,6 +24,7 @@ import (
 	"mewcode/internal/memory"
 	"mewcode/internal/memory/consolidation"
 	"mewcode/internal/memory/extractor"
+	"mewcode/internal/metrics"
 	"mewcode/internal/permissions"
 	"mewcode/internal/planfile"
 	"mewcode/internal/prompt"
@@ -237,6 +238,9 @@ type Model struct {
 	sandboxCfg            config.SandboxConfig // 配置文件中的沙箱设置
 	EnableCoordinatorMode bool                 // Coordinator 模式配置开关
 
+	MetricsRegistry metrics.Registry
+	metricsInst     *metrics.Metrics
+
 	resumeSessions  []session.SessionInfo
 	resumeFiltered  []session.SessionInfo
 	resumeCursor    int
@@ -424,6 +428,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateViewport()
 			return m, nil
 		}
+		if m.MetricsRegistry == nil {
+			m.MetricsRegistry = metrics.NewNoopRegistry()
+		}
+		if m.metricsInst == nil {
+			m.metricsInst = metrics.NewMetrics(m.MetricsRegistry)
+		}
+		client = llm.NewMeteredClient(client, m.metricsInst, p.Protocol, p.Model)
 		m.client = client
 		m.sessionID = session.NewID()
 		m.fileHistory = filehistory.New(wd, m.sessionID)
@@ -440,6 +451,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		ag.Instructions = m.instructionsContent
 		ag.MemoryContent = m.memoryContent
 		ag.FileHistory = m.fileHistory
+		ag.Metrics = m.metricsInst
 		ag.SetSessionID(m.sessionID)
 		sandboxAllow := []string{memory.GetAutoMemPath(wd)}
 		if userMem := memory.GetUserAutoMemPath(); userMem != "" {
@@ -1292,6 +1304,13 @@ func (m Model) handleProviderSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.chatMessages = append(m.chatMessages, chatMessage{role: "error", content: err.Error()})
 			return m, nil
 		}
+		if m.metricsInst == nil {
+			if m.MetricsRegistry == nil {
+				m.MetricsRegistry = metrics.NewNoopRegistry()
+			}
+			m.metricsInst = metrics.NewMetrics(m.MetricsRegistry)
+		}
+		client = llm.NewMeteredClient(client, m.metricsInst, p.Protocol, p.Model)
 		m.client = client
 		m.sessionID = session.NewID()
 		m.fileHistory = filehistory.New(wd, m.sessionID)
@@ -1308,6 +1327,7 @@ func (m Model) handleProviderSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		ag.Instructions = m.instructionsContent
 		ag.MemoryContent = m.memoryContent
 		ag.FileHistory = m.fileHistory
+		ag.Metrics = m.metricsInst
 		ag.SetSessionID(m.sessionID)
 		sandboxAllow := []string{memory.GetAutoMemPath(wd)}
 		if userMem := memory.GetUserAutoMemPath(); userMem != "" {

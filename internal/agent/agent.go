@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"mewcode/internal/filehistory"
 	"mewcode/internal/hooks"
 	"mewcode/internal/llm"
+	"mewcode/internal/metrics"
 	"mewcode/internal/permissions"
 	"mewcode/internal/planfile"
 	"mewcode/internal/prompt"
@@ -81,6 +83,7 @@ type Agent struct {
 	// file reads and skill invocations. The struct is concurrency-safe so
 	// the streaming executor can write to it from multiple goroutines.
 	RecoveryState *compact.RecoveryState
+	Metrics       *metrics.Metrics
 	eventCh       chan AgentEvent
 	// activeSkills tracks which Skill SOPs have been activated in this session (name → body).
 	// Used by /skills to show what's active and by RecoveryState to survive compaction.
@@ -147,6 +150,13 @@ func New(client llm.Client, registry *tools.Registry, protocol string) *Agent {
 // constructed (and again after a resume switches sessions).
 func (a *Agent) SetSessionID(id string) { a.SessionID = id }
 
+func (a *Agent) met() *metrics.Metrics {
+	if a.Metrics == nil {
+		return metrics.Noop
+	}
+	return a.Metrics
+}
+
 // currentToolSchemas builds the schema list the next API call will use,
 // honouring any active ToolNameFilter (e.g. Teams coordinator mode).
 // Shared between the recovery attachment (which lists what's still
@@ -172,8 +182,22 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 	go func() {
 		defer close(ch)
 		defer a.emitHook(hooks.EventSessionEnd, "", nil)
+		defer func() {
+			if r := recover(); r != nil {
+				a.met().RecordPanic("agent_run")
+				ch <- ErrorEvent{Message: fmt.Sprintf("panic recovered: %v\n%s", r, debug.Stack())}
+			}
+		}()
 
 		a.emitHook(hooks.EventSessionStart, "", nil)
+		a.met().IncActiveSessions()
+		a.met().IncActiveTasks()
+		taskStart := time.Now()
+		defer func() {
+			a.met().DecActiveSessions()
+			a.met().DecActiveTasks()
+			a.met().ObserveTaskDuration(time.Since(taskStart))
+		}()
 
 		conv.InjectLongTermMemory(a.Instructions, a.MemoryContent)
 
@@ -194,12 +218,22 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 		var usageAnchor compact.UsageAnchor
 
 		for iteration := 1; ; iteration++ {
+			turnStart := time.Now()
+			a.met().RecordStep()
 			if a.MaxIterations > 0 && iteration > a.MaxIterations {
+				a.met().ObserveTurnsPerRun(iteration - 1)
+				a.met().RecordAgentRun("max_iterations")
+				a.met().RecordMaxStepsReached()
+				a.met().RecordRequest("max_iterations")
 				ch <- ErrorEvent{Message: fmt.Sprintf("Agent reached maximum iterations (%d)", a.MaxIterations)}
 				return
 			}
 
 			if ctx.Err() != nil {
+				a.met().ObserveTurnsPerRun(iteration - 1)
+				a.met().RecordAgentRun("cancelled")
+				a.met().RecordTaskTimeout()
+				a.met().RecordRequest("timeout")
 				return
 			}
 
@@ -244,7 +278,10 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 
 			// Layer 2: auto-compact
 			// conv 已经过 Layer 1 裁剪，直接用其消息估算 token
+			compactStart := time.Now()
 			if msg, err := compact.ManageContext(ctx, conv, a.Client, a.WorkDir, a.SessionID, a.ContextWindow, a.MaxOutputTokens, &a.compactTracking, a.RecoveryState, toolSchemas, usageAnchor, nil); err == nil && msg != "" {
+				a.met().RecordCompaction("success")
+				a.met().ObserveCompactionLatency(time.Since(compactStart))
 				ch <- CompactEvent{Message: msg}
 				usageAnchor = compact.UsageAnchor{}
 				conv.InjectLongTermMemory(a.Instructions, a.MemoryContent)
@@ -309,6 +346,10 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 						continue // retry the turn
 					}
 					ch <- ErrorEvent{Message: err.Error()}
+					a.met().RecordError(llm.ClassifyErrorStatus(err))
+					a.met().ObserveTurnsPerRun(iteration)
+					a.met().RecordAgentRun("error")
+					a.met().RecordRequest("error")
 					return
 				}
 			default:
@@ -316,6 +357,7 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 
 			totalInput += usage.InputTokens
 			totalOutput += usage.OutputTokens
+			a.met().SetConversationTokens(usage.InputTokens + usage.CacheReadTokens + usage.CacheCreationTokens)
 			ch <- UsageEvent{InputTokens: totalInput, OutputTokens: totalOutput}
 
 			// Real-usage baseline for this turn: input + cache_read +
@@ -375,6 +417,8 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				verdict, evidence, verr := a.VerificationGate(ctx, conv)
 				if verr == nil {
 					verifyEvidence = evidence
+					a.met().RecordVerification(verdict.String())
+					a.met().ObserveVerificationRetries(a.verifyRetries)
 					ch <- VerificationEvent{
 						Verdict:  verdict.String(),
 						Evidence: evidence,
@@ -383,6 +427,7 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 					}
 					if verdict == VerdictFail && a.verifyRetries < maxVerifyRetries {
 						a.verifyRetries++
+						a.met().SetVerificationRetries(a.verifyRetries)
 						a.handleVerificationFailure(conv, evidence)
 						continue
 					}
@@ -390,6 +435,7 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				}
 			}
 			a.verifyRetries = 0
+			a.met().SetVerificationRetries(0)
 
 			if a.FileHistory != nil {
 				summary := text
@@ -398,6 +444,15 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				}
 				a.FileHistory.MakeSnapshot(conv.Len(), summary)
 				_ = a.FileHistory.Save()
+			}
+			a.met().ObserveTurnLatency(time.Since(turnStart))
+			a.met().ObserveTurnsPerRun(iteration)
+			if verified {
+				a.met().RecordAgentRun("success")
+				a.met().RecordRequest("success")
+			} else {
+				a.met().RecordAgentRun("unverified")
+				a.met().RecordRequest("unverified")
 			}
 			ch <- LoopComplete{TotalTurns: iteration, Verified: verified, Evidence: verifyEvidence}
 			if a.OnLoopComplete != nil {
@@ -450,10 +505,13 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				})
 			}
 
-			if consecutiveUnknown >= 3 {
-				ch <- ErrorEvent{Message: "Too many consecutive unknown tool calls"}
-				return
-			}
+		if consecutiveUnknown >= 3 {
+			a.met().ObserveTurnsPerRun(iteration)
+			a.met().RecordAgentRun("terminated")
+			a.met().RecordRequest("terminated")
+			ch <- ErrorEvent{Message: "Too many consecutive unknown tool calls"}
+			return
+		}
 
 			exitPlanCalled := false
 			for _, tc := range toolCalls {
@@ -477,13 +535,18 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				}
 			}
 
-			if exitPlanCalled {
-				ch <- TurnComplete{Turn: iteration}
-				ch <- LoopComplete{TotalTurns: iteration}
-				return
-			}
+		if exitPlanCalled {
+			a.met().ObserveTurnLatency(time.Since(turnStart))
+			a.met().ObserveTurnsPerRun(iteration)
+			a.met().RecordAgentRun("success")
+			a.met().RecordRequest("success")
 			ch <- TurnComplete{Turn: iteration}
-			a.emitHook(hooks.EventTurnEnd, "", nil)
+			ch <- LoopComplete{TotalTurns: iteration}
+			return
+		}
+		a.met().ObserveTurnLatency(time.Since(turnStart))
+		ch <- TurnComplete{Turn: iteration}
+		a.emitHook(hooks.EventTurnEnd, "", nil)
 		}
 	}()
 
@@ -560,12 +623,16 @@ func (a *Agent) shouldVerify(conv *conversation.Manager) bool {
 func (a *Agent) handleStreamError(ctx context.Context, ch chan AgentEvent, conv *conversation.Manager, err error) (retry, compacted bool) {
 	var ctxErr *llm.ContextTooLongError
 	if errors.As(err, &ctxErr) {
-		// conv 已由 Layer 1 就地裁剪，直接传 nil 让 ForceCompact 使用 conv 自身消息
+		compactStart := time.Now()
 		msg, compactErr := compact.ForceCompact(ctx, conv, a.Client, a.WorkDir, a.SessionID, a.ContextWindow, a.RecoveryState, a.currentToolSchemas(), nil)
 		if compactErr == nil && msg != "" {
+			a.met().RecordCompaction("force_success")
+			a.met().ObserveCompactionLatency(time.Since(compactStart))
 			ch <- CompactEvent{Message: "Auto-compacted due to context length: " + msg}
-			return true, true // retry, and the anchor is now stale
+			return true, true
 		}
+		a.met().RecordCompaction("force_failed")
+		a.met().ObserveCompactionLatency(time.Since(compactStart))
 		return false, false
 	}
 
@@ -575,7 +642,7 @@ func (a *Agent) handleStreamError(ctx context.Context, ch chan AgentEvent, conv 
 		ch <- RetryEvent{Reason: "rate limited", Wait: wait}
 		select {
 		case <-time.After(wait):
-			return true, false // retry without compaction
+			return true, false
 		case <-ctx.Done():
 			return false, false
 		}
@@ -614,17 +681,42 @@ func extractFilePath(args map[string]any) string {
 	return ""
 }
 
-func (a *Agent) executeSingleTool(ctx context.Context, eventCh chan AgentEvent, tc llm.ToolCallComplete) toolExecResult {
+func (a *Agent) executeSingleTool(ctx context.Context, eventCh chan AgentEvent, tc llm.ToolCallComplete) (result toolExecResult) {
 	tool := a.Registry.Get(tc.ToolName)
 	start := time.Now()
+	rejectedReason := ""
+
+	defer func() {
+		elapsed := time.Since(start)
+		result.elapsed = elapsed
+		if rejectedReason != "" {
+			a.met().RecordToolRejected(tc.ToolName, rejectedReason)
+		}
+		if result.isUnknown {
+			a.met().RecordToolCall(tc.ToolName, "unknown")
+			return
+		}
+		if result.isError {
+			a.met().RecordToolError(tc.ToolName)
+			if rejectedReason == "" {
+				a.met().RecordToolCall(tc.ToolName, "error")
+			} else {
+				a.met().RecordToolCall(tc.ToolName, "rejected")
+			}
+			return
+		}
+		a.met().RecordToolCall(tc.ToolName, "ok")
+		a.met().ObserveToolLatency(tc.ToolName, elapsed)
+		recordCodingMetrics(a, tc.ToolName, tc.Arguments, result.output)
+	}()
 
 	if tool == nil {
+		rejectedReason = "unknown"
 		return toolExecResult{
 			toolID:    tc.ToolID,
 			toolName:  tc.ToolName,
 			output:    fmt.Sprintf("Error: unknown tool '%s'", tc.ToolName),
 			isError:   true,
-			elapsed:   time.Since(start),
 			isUnknown: true,
 		}
 	}
@@ -632,12 +724,12 @@ func (a *Agent) executeSingleTool(ctx context.Context, eventCh chan AgentEvent, 
 	if a.Checker != nil {
 		decision := a.Checker.Check(tool, tc.Arguments)
 		if decision.Effect == permissions.Deny {
+			rejectedReason = "permission"
 			return toolExecResult{
 				toolID:   tc.ToolID,
 				toolName: tc.ToolName,
 				output:   fmt.Sprintf("Permission denied: %s", decision.Reason),
 				isError:  true,
-				elapsed:  time.Since(start),
 			}
 		}
 		if decision.Effect == permissions.Ask {
@@ -651,12 +743,12 @@ func (a *Agent) executeSingleTool(ctx context.Context, eventCh chan AgentEvent, 
 			}
 			resp := <-respCh
 			if resp == PermDeny {
+				rejectedReason = "permission"
 				return toolExecResult{
 					toolID:   tc.ToolID,
 					toolName: tc.ToolName,
 					output:   "Permission denied by user",
 					isError:  true,
-					elapsed:  time.Since(start),
 				}
 			}
 			if resp == PermAllowAlways {
@@ -684,23 +776,23 @@ func (a *Agent) executeSingleTool(ctx context.Context, eventCh chan AgentEvent, 
 			FilePath:  extractFilePath(tc.Arguments),
 		}
 		if rejected, msg := a.Hooks.RunPreToolHooks(hctx); rejected {
+			rejectedReason = "hook"
 			return toolExecResult{
 				toolID:   tc.ToolID,
 				toolName: tc.ToolName,
 				output:   "Blocked by hook: " + msg,
 				isError:  true,
-				elapsed:  time.Since(start),
 			}
 		}
 	}
 
-	result := tool.Execute(ctx, tc.Arguments)
+	toolResult := tool.Execute(ctx, tc.Arguments)
 
 	// Snapshot what ReadFile just handed to the model so the compact
 	// recovery block can replay it after a Layer 2 summary wipes the
 	// transcript. Re-reading from disk is one extra open per ReadFile —
 	// cheaper than parsing line numbers back out of the tool output.
-	if !result.IsError && tc.ToolName == "ReadFile" {
+	if !toolResult.IsError && tc.ToolName == "ReadFile" {
 		if p, _ := tc.Arguments["file_path"].(string); p != "" {
 			if data, err := os.ReadFile(p); err == nil {
 				a.RecoveryState.RecordFileRead(p, string(data))
@@ -714,17 +806,74 @@ func (a *Agent) executeSingleTool(ctx context.Context, eventCh chan AgentEvent, 
 			ToolName:  tc.ToolName,
 			ToolArgs:  tc.Arguments,
 			FilePath:  extractFilePath(tc.Arguments),
-			Message:   result.Output,
+			Message:   toolResult.Output,
 		})
 	}
 
 	return toolExecResult{
 		toolID:   tc.ToolID,
 		toolName: tc.ToolName,
-		output:   result.Output,
-		isError:  result.IsError,
-		elapsed:  time.Since(start),
+		output:   toolResult.Output,
+		isError:  toolResult.IsError,
 	}
+}
+
+func recordCodingMetrics(a *Agent, toolName string, args map[string]any, output string) {
+	switch toolName {
+	case "EditFile", "WriteFile", "NotebookEdit":
+		a.met().RecordFileModified()
+		a.met().RecordCodeEdit()
+	case "Bash", "BashTool":
+		a.met().RecordCommandExecution()
+		cmd := ""
+		if v, ok := args["command"].(string); ok {
+			cmd = v
+		}
+		if isBuildCommand(cmd) {
+			a.met().RecordBuild()
+			if !strings.Contains(output, "error") && !strings.Contains(output, "Error") && !strings.Contains(output, "ERROR") {
+				a.met().RecordBuildSuccess()
+			}
+		}
+		if isTestCommand(cmd) {
+			a.met().RecordTests()
+			if strings.Contains(output, "FAIL") || strings.Contains(output, "failed") {
+				a.met().RecordTestFailed()
+			} else {
+				a.met().RecordTestPassed()
+			}
+		}
+	}
+}
+
+func isBuildCommand(cmd string) bool {
+	buildPatterns := []string{
+		"go build", "npm run build", "yarn build", "pnpm build",
+		"make", "cargo build", "cmake", "gradle build", "mvn ",
+		"docker build", "dotnet build", "msbuild", "nix build",
+	}
+	c := strings.ToLower(cmd)
+	for _, p := range buildPatterns {
+		if strings.Contains(c, strings.ToLower(p)) {
+			return true
+		}
+	}
+	return false
+}
+
+func isTestCommand(cmd string) bool {
+	testPatterns := []string{
+		"go test", "npm test", "npm run test", "yarn test", "pnpm test",
+		"pytest", "python -m pytest", "cargo test", "jest", "vitest",
+		"dotnet test", "mvn test", "gradle test", "rake test",
+	}
+	c := strings.ToLower(cmd)
+	for _, p := range testPatterns {
+		if strings.Contains(c, strings.ToLower(p)) {
+			return true
+		}
+	}
+	return false
 }
 
 func formatToolArgs(args map[string]any) string {

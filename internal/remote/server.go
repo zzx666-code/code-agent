@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"mewcode/internal/mcp"
 	"mewcode/internal/memory"
 	extractor "mewcode/internal/memory/extractor"
+	"mewcode/internal/metrics"
 	"mewcode/internal/permissions"
 	"mewcode/internal/planfile"
 	"mewcode/internal/prompt"
@@ -111,6 +113,8 @@ type Server struct {
 	memoryContent         string
 	mcpInstructions       string
 	enableCoordinatorMode bool
+	metricsReg            metrics.Registry
+	obsConfig             config.ObservabilityConfig
 }
 
 func NewServer(providers []config.ProviderConfig, mcpConfigs []config.MCPServerConfig, hookCfgs []hooks.Hook, addr string, enableCoordinatorMode bool) *Server {
@@ -123,7 +127,18 @@ func NewServer(providers []config.ProviderConfig, mcpConfigs []config.MCPServerC
 		conns:                 make(map[*websocket.Conn]struct{}),
 		pendingPerms:          make(map[string]chan<- agent.PermissionResponse),
 		pendingAsks:           make(map[string]chan tools.QuestionResponse),
+		metricsReg:            metrics.NewNoopRegistry(),
 	}
+}
+
+func (s *Server) SetMetricsRegistry(r metrics.Registry) {
+	if r != nil {
+		s.metricsReg = r
+	}
+}
+
+func (s *Server) SetObservabilityConfig(oc config.ObservabilityConfig) {
+	s.obsConfig = oc
 }
 
 func (s *Server) Run() error {
@@ -137,8 +152,43 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/ws", s.handleWS)
 
+	if s.metricsReg.Enabled() {
+		path := s.obsConfig.Metrics.Path
+		if path == "" {
+			path = "/metrics"
+		}
+		mux.Handle(path, s.metricsReg.Handler())
+	}
+
+	if s.obsConfig.Health.Enabled {
+		mux.HandleFunc("/healthz", s.handleHealthz)
+		mux.HandleFunc("/readyz", s.handleReadyz)
+	}
+
+	mux.HandleFunc("/debug/pprof/", http.DefaultServeMux.ServeHTTP)
+	mux.HandleFunc("/debug/pprof/cmdline", http.DefaultServeMux.ServeHTTP)
+	mux.HandleFunc("/debug/pprof/profile", http.DefaultServeMux.ServeHTTP)
+	mux.HandleFunc("/debug/pprof/symbol", http.DefaultServeMux.ServeHTTP)
+	mux.HandleFunc("/debug/pprof/trace", http.DefaultServeMux.ServeHTTP)
+
 	fmt.Printf("\n  🌐 Remote UI: http://localhost%s\n\n", s.addr)
 	return http.ListenAndServe(s.addr, mux)
+}
+
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status":"alive"}`))
+}
+
+func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	ready := s.ag != nil && s.client != nil
+	if ready {
+		w.Write([]byte(`{"status":"ready"}`))
+		return
+	}
+	w.WriteHeader(http.StatusServiceUnavailable)
+	w.Write([]byte(`{"status":"not ready"}`))
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -245,7 +295,10 @@ func (s *Server) initAgent() error {
 	if err != nil {
 		return err
 	}
-	s.client = client
+
+	metricsInst := metrics.NewMetrics(s.metricsReg)
+	meteredClient := llm.NewMeteredClient(client, metricsInst, p.Protocol, p.Model)
+	s.client = meteredClient
 	s.conv = conversation.NewManager()
 	s.sessionID = session.NewID()
 	s.fileHistory = filehistory.New(wd, s.sessionID)
@@ -253,14 +306,15 @@ func (s *Server) initAgent() error {
 	s.defaultTools.WriteFile.FileHistory = s.fileHistory
 
 	llm.ResolveContextWindow(context.Background(), p)
-	s.registerTools(client, p, wd)
+	s.registerTools(meteredClient, p, wd)
 
-	ag := agent.New(client, s.registry, p.Protocol)
+	ag := agent.New(meteredClient, s.registry, p.Protocol)
 	ag.ContextWindow = p.GetContextWindow()
 	ag.MaxOutputTokens = p.GetMaxOutputTokens()
 	ag.Instructions = s.instructionsContent
 	ag.MemoryContent = s.memoryContent
 	ag.FileHistory = s.fileHistory
+	ag.Metrics = metricsInst
 	ag.SetSessionID(s.sessionID)
 
 	sandboxAllow := []string{memory.GetAutoMemPath(wd)}

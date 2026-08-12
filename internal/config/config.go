@@ -188,16 +188,29 @@ type SandboxConfig struct {
 	NetworkEnabled bool `yaml:"network_enabled"` // 是否允许网络访问
 }
 
+type MetricsConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Path    string `yaml:"path"`
+}
+
+type HealthConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type ObservabilityConfig struct {
+	Metrics MetricsConfig `yaml:"metrics"`
+	Health  HealthConfig  `yaml:"health"`
+}
+
 type AppConfig struct {
-	Providers             []ProviderConfig  `yaml:"providers"`
-	PermissionMode        string            `yaml:"permission_mode"`
-	MCPServers            []MCPServerConfig `yaml:"mcp_servers"`
-	Hooks                 []hooks.Hook      `yaml:"hooks"`
-	Sandbox               SandboxConfig     `yaml:"sandbox"`
-	EnableCoordinatorMode bool              `yaml:"enable_coordinator_mode"`
-	// EnableVerification gates the verification sub-agent and completion gate.
-	// nil (unset) defaults to enabled; set explicitly to false to disable.
-	EnableVerification *bool `yaml:"enable_verification"`
+	Providers             []ProviderConfig     `yaml:"providers"`
+	PermissionMode        string               `yaml:"permission_mode"`
+	MCPServers            []MCPServerConfig    `yaml:"mcp_servers"`
+	Hooks                 []hooks.Hook         `yaml:"hooks"`
+	Sandbox               SandboxConfig        `yaml:"sandbox"`
+	EnableCoordinatorMode bool                 `yaml:"enable_coordinator_mode"`
+	EnableVerification    *bool                `yaml:"enable_verification"`
+	Observability         ObservabilityConfig  `yaml:"observability"`
 }
 
 func loadSingleFile(path string) (*AppConfig, error) {
@@ -241,6 +254,12 @@ func mergeConfig(base, override *AppConfig) *AppConfig {
 	if override.EnableCoordinatorMode {
 		base.EnableCoordinatorMode = true
 	}
+	if override.Observability.Metrics.Enabled {
+		base.Observability.Metrics = override.Observability.Metrics
+	}
+	if override.Observability.Health.Enabled {
+		base.Observability.Health = override.Observability.Health
+	}
 	return base
 }
 
@@ -282,6 +301,7 @@ func LoadConfig(path string) (*AppConfig, error) {
 		if err != nil {
 			return nil, err
 		}
+		applyDefaults(cfg)
 		if err := validateProviders(cfg); err != nil {
 			return nil, err
 		}
@@ -320,8 +340,15 @@ func LoadConfig(path string) (*AppConfig, error) {
 		return nil, &ConfigError{Message: "No config file found. Expected .mewcode/config.yaml in project or ~/.mewcode/config.yaml"}
 	}
 
+	applyDefaults(merged)
 	if err := validateProviders(merged); err != nil {
 		return nil, err
 	}
 	return merged, nil
+}
+
+func applyDefaults(cfg *AppConfig) {
+	if cfg.Observability.Metrics.Path == "" {
+		cfg.Observability.Metrics.Path = "/metrics"
+	}
 }

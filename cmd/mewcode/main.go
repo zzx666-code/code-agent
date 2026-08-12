@@ -9,6 +9,7 @@ import (
 	"mewcode/internal/agents"
 	"mewcode/internal/config"
 	"mewcode/internal/hooks"
+	"mewcode/internal/metrics"
 	"mewcode/internal/remote"
 	"mewcode/internal/tui"
 )
@@ -69,6 +70,10 @@ func main() {
 
 	if remoteAddr != "" {
 		srv := remote.NewServer(cfg.Providers, cfg.MCPServers, validHooks, remoteAddr, cfg.EnableCoordinatorMode)
+		srv.SetObservabilityConfig(cfg.Observability)
+		if cfg.Observability.Metrics.Enabled {
+			srv.SetMetricsRegistry(metrics.NewPrometheusRegistry())
+		}
 		if err := srv.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "Remote server error: %s\n", err)
 			os.Exit(1)
@@ -78,6 +83,9 @@ func main() {
 
 	m := tui.New(cfg.Providers, cfg.MCPServers, validHooks, cfg.Sandbox)
 	m.EnableCoordinatorMode = cfg.EnableCoordinatorMode
+	if cfg.Observability.Metrics.Enabled {
+		m.MetricsRegistry = metrics.NewPrometheusRegistry()
+	}
 	if cfg.EnableVerification != nil {
 		agents.VerificationEnabled = *cfg.EnableVerification
 	}

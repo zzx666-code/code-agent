@@ -17,6 +17,7 @@ import (
 	"mewcode/internal/hooks"
 	"mewcode/internal/llm"
 	"mewcode/internal/memory"
+	"mewcode/internal/metrics"
 	"mewcode/internal/permissions"
 	"mewcode/internal/prompt"
 	"mewcode/internal/session"
@@ -97,6 +98,13 @@ func runPrint(userPrompt string, cfg *config.AppConfig, hookCfgs []hooks.Hook, o
 		return err
 	}
 
+	var metricsReg metrics.Registry = metrics.NewNoopRegistry()
+	if cfg.Observability.Metrics.Enabled {
+		metricsReg = metrics.NewPrometheusRegistry()
+	}
+	metricsInst := metrics.NewMetrics(metricsReg)
+	client = llm.NewMeteredClient(client, metricsInst, p.Protocol, p.Model)
+
 	conv := conversation.NewManager()
 	sessionID := session.NewID()
 	fh := filehistory.New(wd, sessionID)
@@ -135,6 +143,7 @@ func runPrint(userPrompt string, cfg *config.AppConfig, hookCfgs []hooks.Hook, o
 	ag.Instructions = instructionsContent
 	ag.MemoryContent = memoryContent
 	ag.FileHistory = fh
+	ag.Metrics = metricsInst
 	ag.SetSessionID(sessionID)
 
 	// print 模式自动允许所有权限

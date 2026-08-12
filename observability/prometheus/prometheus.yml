@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "mewcode"
+    static_configs:
+      - targets: ["host.docker.internal:18888"]
+        labels:
+          app: "mewcode-agent"
