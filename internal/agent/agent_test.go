@@ -83,7 +83,7 @@ type mockTool struct {
 	result string
 }
 
-func (t *mockTool) Name() string { return t.name }
+func (t *mockTool) Name() string        { return t.name }
 func (t *mockTool) Description() string { return "mock tool" }
 
 func (t *mockTool) Category() tools.ToolCategory { return tools.CategoryRead }

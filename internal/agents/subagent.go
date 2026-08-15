@@ -12,6 +12,7 @@ import (
 	"mewcode/internal/llm"
 	"mewcode/internal/permissions"
 	"mewcode/internal/tools"
+	"mewcode/internal/trace"
 )
 
 type TaskStatus string
@@ -290,6 +291,8 @@ func SpawnSubAgent(
 	spec SubAgentSpec,
 	taskPrompt string,
 	parentChecker *permissions.Checker,
+	traceWorkDir string,
+	traceParentRunID string,
 ) string {
 	taskID := taskMgr.CreateTask(spec.Name + ": " + truncate(taskPrompt, 50))
 
@@ -300,6 +303,14 @@ func SpawnSubAgent(
 
 	subAgent := agent.New(client, subRegistry, protocol)
 	subAgent.Checker = deriveSubAgentChecker(parentChecker, spec.PermissionMode)
+	if traceWorkDir != "" && traceParentRunID != "" {
+		subAgent.TraceObserver = trace.NewRecorder(traceWorkDir, trace.RunStartData{
+			Origin:       spec.Name,
+			Protocol:     protocol,
+			WorkDir:      traceWorkDir,
+			PromptDigest: taskPrompt,
+		}, traceParentRunID)
+	}
 	if spec.MaxTurns > 0 {
 		subAgent.MaxIterations = spec.MaxTurns
 	} else {

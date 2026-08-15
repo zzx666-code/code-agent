@@ -1,6 +1,10 @@
 package agent
 
-import "time"
+import (
+	"time"
+
+	"mewcode/internal/llm"
+)
 
 type AgentEvent interface{ agentEvent() }
 
@@ -27,12 +31,22 @@ type (
 		Verified   bool
 		Evidence   string
 	}
-	UsageEvent struct{ InputTokens, OutputTokens int }
-	ErrorEvent struct{ Message string }
+	UsageEvent   struct{ InputTokens, OutputTokens int }
+	ErrorEvent   struct{ Message string }
 	CompactEvent struct{ Message string }
-	RetryEvent struct {
+	RetryEvent   struct {
 		Reason string
 		Wait   time.Duration
+	}
+	LLMStartEvent struct {
+		Turn int
+	}
+	LLMEndEvent struct {
+		Turn       int
+		StopReason string
+		Usage      llm.UsageInfo
+		Elapsed    time.Duration
+		TTFT       time.Duration
 	}
 	VerificationEvent struct {
 		Verdict  string
@@ -72,6 +86,9 @@ func (CompactEvent) agentEvent() {}
 
 func (RetryEvent) agentEvent()             {}
 func (PermissionRequestEvent) agentEvent() {}
+
+func (LLMStartEvent) agentEvent() {}
+func (LLMEndEvent) agentEvent()   {}
 
 func (VerificationEvent) agentEvent() {}
 

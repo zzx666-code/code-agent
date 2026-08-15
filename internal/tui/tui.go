@@ -35,6 +35,7 @@ import (
 	"mewcode/internal/teams"
 	"mewcode/internal/todo"
 	"mewcode/internal/tools"
+	"mewcode/internal/trace"
 	"mewcode/internal/worktree"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -240,6 +241,9 @@ type Model struct {
 
 	MetricsRegistry metrics.Registry
 	metricsInst     *metrics.Metrics
+
+	TraceEnabled bool
+	lastPrompt   string
 
 	resumeSessions  []session.SessionInfo
 	resumeFiltered  []session.SessionInfo
@@ -671,7 +675,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.userScrolled = false
 		ctx, cancel := context.WithCancel(context.Background())
 		m.cancelStream = cancel
-		m.agentCh = m.ag.Run(ctx, m.conversation)
+		m.agentCh = m.runAgent(ctx)
 		m.updateViewport()
 		return m, tea.Batch(
 			m.listenForAgentEvents(),
@@ -737,6 +741,25 @@ func newAgentHookRunner(client llm.Client) func(prompt string, ctx hooks.HookCon
 		}
 		return text, nil
 	}
+}
+
+func (m *Model) runAgent(ctx context.Context) <-chan agent.AgentEvent {
+	if m.TraceEnabled && m.ag != nil {
+		wd := m.getWorkDir()
+		rec := trace.NewRecorder(wd, trace.RunStartData{
+			Origin:       "tui",
+			Model:        m.getModelName(),
+			SessionID:    m.sessionID,
+			WorkDir:      wd,
+			PromptDigest: m.lastPrompt,
+		}, "")
+		m.ag.TraceObserver = rec
+		if at, ok := m.registry.Get("Agent").(*agents.AgentTool); ok {
+			at.TraceWorkDir = wd
+			at.TraceParentRunID = rec.RunID()
+		}
+	}
+	return m.ag.Run(ctx, m.conversation)
 }
 
 func (m *Model) registerAgentTools(client llm.Client, providerCfg *config.ProviderConfig, protocol, wd string) {
@@ -2869,12 +2892,11 @@ func (m Model) sendMessage(text string) (tea.Model, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelStream = cancel
 
-	conv := m.conversation
-	ag := m.ag
 	// 非阻塞 memory recall：prefetchCh 传给 agent，工具执行后注入
-	ag.MemoryRecallCh = prefetchCh
+	m.ag.MemoryRecallCh = prefetchCh
+	m.lastPrompt = expanded
 	startAgentCmd := func() tea.Msg {
-		return agentReadyMsg{ch: ag.Run(ctx, conv)}
+		return agentReadyMsg{ch: m.runAgent(ctx)}
 	}
 
 	m.updateViewport()
@@ -2913,11 +2935,10 @@ func (m Model) sendPromptCommand(displayText, prompt string) (tea.Model, tea.Cmd
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelStream = cancel
 
-	conv := m.conversation
-	ag := m.ag
-	ag.MemoryRecallCh = prefetchCh
+	m.ag.MemoryRecallCh = prefetchCh
+	m.lastPrompt = prompt
 	startAgentCmd := func() tea.Msg {
-		return agentReadyMsg{ch: ag.Run(ctx, conv)}
+		return agentReadyMsg{ch: m.runAgent(ctx)}
 	}
 
 	m.updateViewport()

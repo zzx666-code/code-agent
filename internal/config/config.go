@@ -197,9 +197,19 @@ type HealthConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+type TraceConfig struct {
+	// Enabled defaults to true; set observability.trace.enabled: false to disable.
+	Enabled *bool `yaml:"enabled"`
+}
+
+func (t TraceConfig) IsEnabled() bool {
+	return t.Enabled == nil || *t.Enabled
+}
+
 type ObservabilityConfig struct {
 	Metrics MetricsConfig `yaml:"metrics"`
 	Health  HealthConfig  `yaml:"health"`
+	Trace   TraceConfig   `yaml:"trace"`
 }
 
 type AppConfig struct {

@@ -17,6 +17,7 @@ import (
 	"mewcode/internal/teams"
 	"mewcode/internal/toolresult"
 	"mewcode/internal/tools"
+	"mewcode/internal/trace"
 	"mewcode/internal/worktree"
 )
 
@@ -84,9 +85,27 @@ type AgentTool struct {
 
 	// QuerySource identifies the spawning agent for nested-fork detection. Empty for the main thread;
 	// set to ForkQuerySource (or "agent:builtin:<type>") when the AgentTool instance lives inside a
-	// spawned sub-agent. Compaction-resistant — survives even when the fork boilerplate gets
+	// spawned sub-agent. Compaction-resistant - survives even when the fork boilerplate gets
 	// summarized out of conversation history.
 	QuerySource string
+
+	// TraceWorkDir + TraceParentRunID, when both set, attach a trace Recorder
+	// to spawned sub-agents with parent_run_id correlation. Updated by the
+	// host (TUI/remote/print) whenever a new parent run starts.
+	TraceWorkDir     string
+	TraceParentRunID string
+}
+
+func (t *AgentTool) attachSubTrace(subAgent *agent.Agent, origin, prompt string) {
+	if t.TraceParentRunID == "" || t.TraceWorkDir == "" {
+		return
+	}
+	subAgent.TraceObserver = trace.NewRecorder(t.TraceWorkDir, trace.RunStartData{
+		Origin:       origin,
+		Protocol:     t.Protocol,
+		WorkDir:      t.TraceWorkDir,
+		PromptDigest: prompt,
+	}, t.TraceParentRunID)
 }
 
 func (t *AgentTool) Name() string                 { return "Agent" }
@@ -145,7 +164,6 @@ func buildVerificationPrompt(conv *conversation.Manager) string {
 	sb.WriteString("\nRun the build, tests, and linters. Try to break the implementation. End with a VERDICT line.\n")
 	return sb.String()
 }
-
 
 func (t *AgentTool) Description() string {
 	desc := `Launch a sub-agent to handle a complex task. Each sub-agent runs independently with its own context. The sub-agent cannot see the current conversation.
@@ -344,6 +362,7 @@ func (t *AgentTool) runSync(ctx context.Context, spec SubAgentSpec, description,
 
 	subAgent := agent.New(client, subRegistry, t.Protocol)
 	subAgent.Checker = deriveSubAgentChecker(t.ParentChecker, spec.PermissionMode)
+	t.attachSubTrace(subAgent, spec.Name, prompt)
 	if spec.MaxTurns > 0 {
 		subAgent.MaxIterations = spec.MaxTurns
 	} else {
@@ -491,6 +510,7 @@ func (t *AgentTool) runFork(ctx context.Context, description, prompt, modelOverr
 	subAgent := agent.New(client, subRegistry, t.Protocol)
 	subAgent.Checker = t.ParentChecker // fork inherits parent's permission state verbatim
 	subAgent.MaxIterations = 200
+	t.attachSubTrace(subAgent, "fork", prompt)
 	// Fork inherits the parent's tool-result decision log so any tool_use_id
 	// already seen in the shared history makes the same decision in the
 	// child — necessary to keep the prompt-cache prefix byte-identical
@@ -637,7 +657,7 @@ func buildForkedConversation(parent *conversation.Manager, task string) *convers
 
 func (t *AgentTool) runAsync(ctx context.Context, spec SubAgentSpec, description, prompt, modelOverride string) tools.ToolResult {
 	client := t.selectClient(spec.Model, modelOverride)
-	taskID := SpawnSubAgent(ctx, t.TaskMgr, client, t.Registry, t.Protocol, spec, prompt, t.ParentChecker)
+	taskID := SpawnSubAgent(ctx, t.TaskMgr, client, t.Registry, t.Protocol, spec, prompt, t.ParentChecker, t.TraceWorkDir, t.TraceParentRunID)
 
 	return tools.ToolResult{
 		Output: fmt.Sprintf(

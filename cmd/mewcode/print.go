@@ -24,6 +24,7 @@ import (
 	"mewcode/internal/skills"
 	"mewcode/internal/todo"
 	"mewcode/internal/tools"
+	"mewcode/internal/trace"
 	"mewcode/internal/worktree"
 )
 
@@ -145,6 +146,21 @@ func runPrint(userPrompt string, cfg *config.AppConfig, hookCfgs []hooks.Hook, o
 	ag.FileHistory = fh
 	ag.Metrics = metricsInst
 	ag.SetSessionID(sessionID)
+	if cfg.Observability.Trace.IsEnabled() {
+		rec := trace.NewRecorder(wd, trace.RunStartData{
+			Origin:       "print",
+			Model:        p.Model,
+			Protocol:     p.Protocol,
+			SessionID:    sessionID,
+			WorkDir:      wd,
+			PromptDigest: userPrompt,
+		}, "")
+		ag.TraceObserver = rec
+		if at, ok := registry.Get("Agent").(*agents.AgentTool); ok {
+			at.TraceWorkDir = wd
+			at.TraceParentRunID = rec.RunID()
+		}
+	}
 
 	// print 模式自动允许所有权限
 	sandboxAllow := []string{memory.GetAutoMemPath(wd)}

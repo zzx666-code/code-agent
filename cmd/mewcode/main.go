@@ -15,6 +15,14 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "trace" {
+		if err := runTraceCommand(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "trace: %s\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if args, ok := parseTeammateFlags(os.Args[1:]); ok {
 		if err := runTeammate(args); err != nil {
 			fmt.Fprintf(os.Stderr, "teammate: %s\n", err)
@@ -83,6 +91,7 @@ func main() {
 
 	m := tui.New(cfg.Providers, cfg.MCPServers, validHooks, cfg.Sandbox)
 	m.EnableCoordinatorMode = cfg.EnableCoordinatorMode
+	m.TraceEnabled = cfg.Observability.Trace.IsEnabled()
 	if cfg.Observability.Metrics.Enabled {
 		m.MetricsRegistry = metrics.NewPrometheusRegistry()
 	}

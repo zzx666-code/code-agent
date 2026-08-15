@@ -36,6 +36,7 @@ import (
 	"mewcode/internal/teams"
 	"mewcode/internal/todo"
 	"mewcode/internal/tools"
+	"mewcode/internal/trace"
 	"mewcode/internal/worktree"
 )
 
@@ -115,6 +116,7 @@ type Server struct {
 	enableCoordinatorMode bool
 	metricsReg            metrics.Registry
 	obsConfig             config.ObservabilityConfig
+	traceModel            string
 }
 
 func NewServer(providers []config.ProviderConfig, mcpConfigs []config.MCPServerConfig, hookCfgs []hooks.Hook, addr string, enableCoordinatorMode bool) *Server {
@@ -316,6 +318,7 @@ func (s *Server) initAgent() error {
 	ag.FileHistory = s.fileHistory
 	ag.Metrics = metricsInst
 	ag.SetSessionID(s.sessionID)
+	s.traceModel = p.Model
 
 	sandboxAllow := []string{memory.GetAutoMemPath(wd)}
 	if userMem := memory.GetUserAutoMemPath(); userMem != "" {
@@ -475,7 +478,7 @@ func (s *Server) handleUserMessage(content string) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancelStream = cancel
-	s.agentCh = s.ag.Run(ctx, s.conv)
+	s.agentCh = s.runAgent(ctx, content)
 
 	askDone := make(chan struct{})
 	go s.listenForAskUser(askDone)
@@ -485,6 +488,25 @@ func (s *Server) handleUserMessage(content string) {
 	s.streaming = false
 	s.cancelStream = nil
 	s.agentCh = nil
+}
+
+func (s *Server) runAgent(ctx context.Context, prompt string) <-chan agent.AgentEvent {
+	if s.obsConfig.Trace.IsEnabled() && s.ag != nil {
+		wd, _ := os.Getwd()
+		rec := trace.NewRecorder(wd, trace.RunStartData{
+			Origin:       "remote",
+			Model:        s.traceModel,
+			SessionID:    s.sessionID,
+			WorkDir:      wd,
+			PromptDigest: prompt,
+		}, "")
+		s.ag.TraceObserver = rec
+		if at, ok := s.registry.Get("Agent").(*agents.AgentTool); ok {
+			at.TraceWorkDir = wd
+			at.TraceParentRunID = rec.RunID()
+		}
+	}
+	return s.ag.Run(ctx, s.conv)
 }
 
 func (s *Server) buildCommandList() []map[string]string {
@@ -590,7 +612,7 @@ func (s *Server) handleSlashCommand(input string) {
 
 		c, cancel := context.WithCancel(context.Background())
 		s.cancelStream = cancel
-		s.agentCh = s.ag.Run(c, s.conv)
+		s.agentCh = s.runAgent(c, prompt)
 
 		askDone := make(chan struct{})
 		go s.listenForAskUser(askDone)
@@ -687,7 +709,7 @@ func (s *Server) handlePlan(args string) {
 		s.conv.AddUserMessage(args)
 		ctx, cancel := context.WithCancel(context.Background())
 		s.cancelStream = cancel
-		s.agentCh = s.ag.Run(ctx, s.conv)
+		s.agentCh = s.runAgent(ctx, args)
 		askDone := make(chan struct{})
 		go s.listenForAskUser(askDone)
 		s.consumeAgentEvents()

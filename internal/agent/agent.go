@@ -29,6 +29,11 @@ const (
 	maxVerifyRetries          = 2
 )
 
+type TraceObserver interface {
+	ObserveAgentEvent(ev AgentEvent)
+	TraceClose()
+}
+
 type Agent struct {
 	Client        llm.Client
 	Registry      *tools.Registry
@@ -62,8 +67,8 @@ type Agent struct {
 	// (final assistant message, no tool calls remaining). Used by ch09 background memory extraction.
 	// Replaces the original stopHooks dispatcher; failures are silent and must not block the main
 	// loop. The callback receives the live conversation — do not mutate it from another goroutine.
-	OnLoopComplete  func(conv *conversation.Manager)
-	FileHistory     *filehistory.History
+	OnLoopComplete func(conv *conversation.Manager)
+	FileHistory    *filehistory.History
 	// VerificationGate, when non-nil, is invoked synchronously at the completion
 	// point (no tool calls remaining) for non-trivial changes. A FAIL verdict
 	// triggers graded recovery (soft retry -> rewind+retry -> rewind+terminate)
@@ -83,6 +88,11 @@ type Agent struct {
 	// file reads and skill invocations. The struct is concurrency-safe so
 	// the streaming executor can write to it from multiple goroutines.
 	RecoveryState *compact.RecoveryState
+	// TraceObserver, when non-nil, receives a read-only tap of every AgentEvent
+	// emitted by Run (tee pattern). Implementations must never block and must
+	// not mutate the conversation. TraceClose is called once the event stream
+	// has ended.
+	TraceObserver TraceObserver
 	Metrics       *metrics.Metrics
 	eventCh       chan AgentEvent
 	// activeSkills tracks which Skill SOPs have been activated in this session (name → body).
@@ -289,6 +299,8 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				toolresult.Apply(conv, a.WorkDir, a.ReplacementState) //nolint:errcheck
 			}
 
+			llmStart := time.Now()
+			ch <- LLMStartEvent{Turn: iteration}
 			events, errs := a.Client.Stream(ctx, conv, toolSchemas)
 
 			var text string
@@ -296,10 +308,14 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 			var thinkingBlocks []conversation.ThinkingBlock
 			var stopReason string
 			var usage llm.UsageInfo
+			var firstEventAt time.Time
 
 			executor := NewStreamingExecutor(a.Registry, a.Checker, ch)
 
 			for ev := range events {
+				if firstEventAt.IsZero() {
+					firstEventAt = time.Now()
+				}
 				switch e := ev.(type) {
 				case llm.ThinkingDelta:
 					ch <- ThinkingText{Text: e.Text}
@@ -328,6 +344,17 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 					stopReason = e.StopReason
 					usage = e.Usage
 				}
+			}
+			llmTTFT := time.Duration(0)
+			if !firstEventAt.IsZero() {
+				llmTTFT = firstEventAt.Sub(llmStart)
+			}
+			ch <- LLMEndEvent{
+				Turn:       iteration,
+				StopReason: stopReason,
+				Usage:      usage,
+				Elapsed:    time.Since(llmStart),
+				TTFT:       llmTTFT,
 			}
 			a.emitHook(hooks.EventPostReceive, text, nil)
 
@@ -408,58 +435,58 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				outputRecoveries = 0
 			}
 
-		if len(toolCalls) == 0 {
-			conv.AddAssistantFull(text, thinkingBlocks, nil)
+			if len(toolCalls) == 0 {
+				conv.AddAssistantFull(text, thinkingBlocks, nil)
 
-			verified := true
-			var verifyEvidence string
-			if a.VerificationGate != nil && a.shouldVerify(conv) {
-				verdict, evidence, verr := a.VerificationGate(ctx, conv)
-				if verr == nil {
-					verifyEvidence = evidence
-					a.met().RecordVerification(verdict.String())
-					a.met().ObserveVerificationRetries(a.verifyRetries)
-					ch <- VerificationEvent{
-						Verdict:  verdict.String(),
-						Evidence: evidence,
-						Retry:    a.verifyRetries,
-						MaxRetry: maxVerifyRetries,
+				verified := true
+				var verifyEvidence string
+				if a.VerificationGate != nil && a.shouldVerify(conv) {
+					verdict, evidence, verr := a.VerificationGate(ctx, conv)
+					if verr == nil {
+						verifyEvidence = evidence
+						a.met().RecordVerification(verdict.String())
+						a.met().ObserveVerificationRetries(a.verifyRetries)
+						ch <- VerificationEvent{
+							Verdict:  verdict.String(),
+							Evidence: evidence,
+							Retry:    a.verifyRetries,
+							MaxRetry: maxVerifyRetries,
+						}
+						if verdict == VerdictFail && a.verifyRetries < maxVerifyRetries {
+							a.verifyRetries++
+							a.met().SetVerificationRetries(a.verifyRetries)
+							a.handleVerificationFailure(conv, evidence)
+							continue
+						}
+						verified = verdict != VerdictFail
 					}
-					if verdict == VerdictFail && a.verifyRetries < maxVerifyRetries {
-						a.verifyRetries++
-						a.met().SetVerificationRetries(a.verifyRetries)
-						a.handleVerificationFailure(conv, evidence)
-						continue
-					}
-					verified = verdict != VerdictFail
 				}
-			}
-			a.verifyRetries = 0
-			a.met().SetVerificationRetries(0)
+				a.verifyRetries = 0
+				a.met().SetVerificationRetries(0)
 
-			if a.FileHistory != nil {
-				summary := text
-				if len(summary) > 60 {
-					summary = summary[:60] + "..."
+				if a.FileHistory != nil {
+					summary := text
+					if len(summary) > 60 {
+						summary = summary[:60] + "..."
+					}
+					a.FileHistory.MakeSnapshot(conv.Len(), summary)
+					_ = a.FileHistory.Save()
 				}
-				a.FileHistory.MakeSnapshot(conv.Len(), summary)
-				_ = a.FileHistory.Save()
+				a.met().ObserveTurnLatency(time.Since(turnStart))
+				a.met().ObserveTurnsPerRun(iteration)
+				if verified {
+					a.met().RecordAgentRun("success")
+					a.met().RecordRequest("success")
+				} else {
+					a.met().RecordAgentRun("unverified")
+					a.met().RecordRequest("unverified")
+				}
+				ch <- LoopComplete{TotalTurns: iteration, Verified: verified, Evidence: verifyEvidence}
+				if a.OnLoopComplete != nil {
+					go a.OnLoopComplete(conv)
+				}
+				return
 			}
-			a.met().ObserveTurnLatency(time.Since(turnStart))
-			a.met().ObserveTurnsPerRun(iteration)
-			if verified {
-				a.met().RecordAgentRun("success")
-				a.met().RecordRequest("success")
-			} else {
-				a.met().RecordAgentRun("unverified")
-				a.met().RecordRequest("unverified")
-			}
-			ch <- LoopComplete{TotalTurns: iteration, Verified: verified, Evidence: verifyEvidence}
-			if a.OnLoopComplete != nil {
-				go a.OnLoopComplete(conv)
-			}
-			return
-		}
 
 			var toolUses []conversation.ToolUseBlock
 			for _, tc := range toolCalls {
@@ -505,13 +532,13 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				})
 			}
 
-		if consecutiveUnknown >= 3 {
-			a.met().ObserveTurnsPerRun(iteration)
-			a.met().RecordAgentRun("terminated")
-			a.met().RecordRequest("terminated")
-			ch <- ErrorEvent{Message: "Too many consecutive unknown tool calls"}
-			return
-		}
+			if consecutiveUnknown >= 3 {
+				a.met().ObserveTurnsPerRun(iteration)
+				a.met().RecordAgentRun("terminated")
+				a.met().RecordRequest("terminated")
+				ch <- ErrorEvent{Message: "Too many consecutive unknown tool calls"}
+				return
+			}
 
 			exitPlanCalled := false
 			for _, tc := range toolCalls {
@@ -535,20 +562,33 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				}
 			}
 
-		if exitPlanCalled {
+			if exitPlanCalled {
+				a.met().ObserveTurnLatency(time.Since(turnStart))
+				a.met().ObserveTurnsPerRun(iteration)
+				a.met().RecordAgentRun("success")
+				a.met().RecordRequest("success")
+				ch <- TurnComplete{Turn: iteration}
+				ch <- LoopComplete{TotalTurns: iteration}
+				return
+			}
 			a.met().ObserveTurnLatency(time.Since(turnStart))
-			a.met().ObserveTurnsPerRun(iteration)
-			a.met().RecordAgentRun("success")
-			a.met().RecordRequest("success")
 			ch <- TurnComplete{Turn: iteration}
-			ch <- LoopComplete{TotalTurns: iteration}
-			return
-		}
-		a.met().ObserveTurnLatency(time.Since(turnStart))
-		ch <- TurnComplete{Turn: iteration}
-		a.emitHook(hooks.EventTurnEnd, "", nil)
+			a.emitHook(hooks.EventTurnEnd, "", nil)
 		}
 	}()
+
+	if a.TraceObserver != nil {
+		out := make(chan AgentEvent, 32)
+		go func() {
+			defer close(out)
+			for ev := range ch {
+				a.TraceObserver.ObserveAgentEvent(ev)
+				out <- ev
+			}
+			a.TraceObserver.TraceClose()
+		}()
+		return out
+	}
 
 	return ch
 }
