@@ -123,7 +123,10 @@ func (t *BashTool) Execute(ctx context.Context, args map[string]any) ToolResult 
 	defer cancel()
 
 	// 如果沙箱可用，将命令包装到沙箱内执行
+	// 沙箱（bwrap/seatbelt）只在 Linux/macOS 存在，Windows 上 Sandbox 为 nil，
+	// 走 resolveShell 解析出的本地 shell。
 	actualCommand := command
+	shellPath, shellIsPosix := resolveShell()
 	if t.Sandbox != nil && t.Sandbox.Available() {
 		wrapped, err := t.Sandbox.Wrap(command, t.SandboxConfig)
 		if err == nil {
@@ -131,7 +134,12 @@ func (t *BashTool) Execute(ctx context.Context, args map[string]any) ToolResult 
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, "bash", "-c", actualCommand)
+	var cmd *exec.Cmd
+	if shellIsPosix {
+		cmd = exec.CommandContext(ctx, shellPath, "-c", actualCommand)
+	} else {
+		cmd = exec.CommandContext(ctx, shellPath, "/c", actualCommand)
+	}
 	// stdout 和 stderr 合并到同一个流，简化输出解析
 	var combined bytes.Buffer
 	cmd.Stdout = &combined
@@ -170,6 +178,12 @@ func (t *BashTool) Execute(ctx context.Context, args map[string]any) ToolResult 
 		}
 	}
 
-	// is_error 只在超时/中断时为 true，正常非零退出码不标 error
-	return ToolResult{Output: sb.String(), IsError: false}
+	// 启动失败（shell 本身没跑起来，如 WSL 代理找不到 /bin/bash）、
+	// WSL 代理 relay 错误、或超时属于真实错误，必须标记 is_error，
+	// 否则模型会误以为命令成功。
+	startupFailed := exitCode == 0 && err != nil
+	wslRelayFailed := exitCode != 0 && strings.Contains(combined.String(), "WSL") &&
+		strings.Contains(combined.String(), "execvpe")
+	isError := ctx.Err() == context.DeadlineExceeded || startupFailed || wslRelayFailed
+	return ToolResult{Output: sb.String(), IsError: isError}
 }

@@ -178,7 +178,8 @@ type Model struct {
 	thinking      bool
 	thinkingStart time.Time
 	thinkingDone  float64
-	thinkingVerb  string
+	thinkingBuf   string
+	thinkingView  bool
 
 	instructionsContent string
 	memoryContent       string
@@ -669,7 +670,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.thinking = true
 		m.thinkingStart = time.Now()
 		m.thinkingDone = 0
-		m.thinkingVerb = randomVerb()
+		m.thinkingBuf = ""
+		m.thinkingView = false
 		m.streamBuf = ""
 		m.toolBlocks = nil
 		m.userScrolled = false
@@ -1421,6 +1423,31 @@ func (m Model) handleChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	if m.sandboxDialog {
 		return m.handleSandboxDialog(msg)
+	}
+
+	// ctrl+t: toggle live thinking panel
+	if msg.String() == "ctrl+t" {
+		if m.thinkingView {
+			m.thinkingView = false
+			m.updateViewport()
+			return m, nil
+		}
+		if m.thinkingBuf == "" {
+			m.chatMessages = append(m.chatMessages, chatMessage{
+				role:    "system",
+				content: "No thinking content yet (model has not streamed any thinking this turn)",
+			})
+			m.committedUpTo = len(m.chatMessages)
+			m.updateViewport()
+			commit := m.renderMessagesRange(len(m.chatMessages)-1, len(m.chatMessages))
+			if commit != "" {
+				return m, tea.Println(commit)
+			}
+			return m, nil
+		}
+		m.thinkingView = true
+		m.updateViewport()
+		return m, nil
 	}
 
 	// ctrl+o: toggle expand/collapse on ALL collapsible blocks
@@ -2865,7 +2892,8 @@ func (m Model) sendMessage(text string) (tea.Model, tea.Cmd) {
 	m.thinking = true
 	m.thinkingStart = time.Now()
 	m.thinkingDone = 0
-	m.thinkingVerb = randomVerb()
+	m.thinkingBuf = ""
+	m.thinkingView = false
 	m.atMenuOpen = false
 	m.atMatches = nil
 	m.textarea.Reset()
@@ -2915,7 +2943,8 @@ func (m Model) sendPromptCommand(displayText, prompt string) (tea.Model, tea.Cmd
 	m.thinking = true
 	m.thinkingStart = time.Now()
 	m.thinkingDone = 0
-	m.thinkingVerb = randomVerb()
+	m.thinkingBuf = ""
+	m.thinkingView = false
 	m.atMenuOpen = false
 	m.atMatches = nil
 	m.textarea.Reset()
@@ -3030,6 +3059,10 @@ func (m Model) pollMailbox() tea.Cmd {
 
 func (m Model) handleAgentEvent(ev agent.AgentEvent) (tea.Model, tea.Cmd) {
 	switch e := ev.(type) {
+	case agent.ThinkingText:
+		m.thinkingBuf += e.Text
+		m.updateViewport()
+
 	case agent.StreamText:
 		m.streamBuf += e.Text
 		m.updateViewport()
@@ -3245,7 +3278,7 @@ func (m Model) handleAgentEvent(ev agent.AgentEvent) (tea.Model, tea.Cmd) {
 		}
 		m.chatMessages = append(m.chatMessages, chatMessage{
 			role:    "thinking",
-			content: fmt.Sprintf("✻ %s for %.1fs", m.pastTense(m.thinkingVerb), totalTime),
+			content: fmt.Sprintf("✻ Thought for %.1fs", totalTime),
 		})
 		commitText := m.renderMessagesRange(m.committedUpTo, len(m.chatMessages))
 		m.committedUpTo = len(m.chatMessages)
@@ -3480,7 +3513,7 @@ func (m Model) renderTeammateTree() string {
 	sb.WriteString("  ┌─ ")
 	sb.WriteString(cyanStyle.Render("team-lead"))
 	sb.WriteString(": ")
-	sb.WriteString(dimStyle.Render(m.thinkingVerb + "…"))
+	sb.WriteString(dimStyle.Render("thinking…"))
 	if m.totalInput+m.totalOutput > 0 {
 		sb.WriteString(dimStyle.Render(fmt.Sprintf(" · %s tokens", teams.FormatTokens(int64(m.totalInput+m.totalOutput)))))
 	}
@@ -3795,13 +3828,32 @@ func (m Model) renderChatContent() string {
 		sb.WriteString("\n")
 	}
 
-	// Spinner — always last while agent is running
+	// Live thinking panel (ctrl+t)
+	if m.thinkingView && m.thinkingBuf != "" {
+		header := lipgloss.NewStyle().Foreground(brandPurple).Bold(true).Render("✻ Thinking")
+		hint := lipgloss.NewStyle().Foreground(dimText).Render("  (ctrl+t to hide)")
+		sb.WriteString("\n")
+		sb.WriteString("  " + header + hint + "\n")
+		lines := strings.Split(m.thinkingBuf, "\n")
+		start := 0
+		if len(lines) > 30 {
+			start = len(lines) - 30
+		}
+		shown := strings.Join(lines[start:], "\n")
+		indented := indentBlock(shown, "  ")
+		sb.WriteString(lipgloss.NewStyle().Foreground(dimText).Render(strings.TrimRight(indented, " \n")))
+		sb.WriteString("\n")
+	}
+
 	if m.streaming {
 		elapsed := time.Since(m.thinkingStart).Seconds()
 		sb.WriteString("\n")
 		sb.WriteString(lipgloss.NewStyle().Foreground(brandPurple).Render(
-			fmt.Sprintf("  %s %s…  (%.0fs)", m.spinner.View(), m.thinkingVerb, elapsed),
+			fmt.Sprintf("  %s Thinking…  (%.0fs)", m.spinner.View(), elapsed),
 		))
+		if m.thinkingBuf != "" {
+			sb.WriteString(lipgloss.NewStyle().Foreground(dimText).Render("  (ctrl+t: thinking)"))
+		}
 		sb.WriteString("\n")
 		// Teammate progress tree
 		sb.WriteString(m.renderTeammateTree())
@@ -4109,21 +4161,6 @@ func indentBlock(text string, prefix string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
-}
-
-func (m Model) pastTense(verb string) string {
-	if strings.HasSuffix(verb, "ing") {
-		stem := strings.TrimSuffix(verb, "ing")
-		if strings.HasSuffix(stem, "at") || strings.HasSuffix(stem, "ut") ||
-			strings.HasSuffix(stem, "it") || strings.HasSuffix(stem, "et") {
-			return stem + "ed"
-		}
-		if strings.HasSuffix(stem, "e") {
-			return stem + "d"
-		}
-		return stem + "ed"
-	}
-	return verb
 }
 
 func (m Model) getModelName() string {

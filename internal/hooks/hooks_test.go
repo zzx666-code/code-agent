@@ -3,6 +3,7 @@ package hooks
 import (
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -263,6 +264,9 @@ func TestValidateAcceptsGoodConfig(t *testing.T) {
 }
 
 func TestRunCommandTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no process-group kill; the grandchild sleep holds the pipe until natural exit")
+	}
 	h := Hook{
 		ID: "slow",
 		Action: Action{

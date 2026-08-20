@@ -23,6 +23,7 @@ type openaiCompatClient struct {
 	client       openai.Client
 	model        string
 	systemPrompt string
+	thinking     bool
 }
 
 func newOpenAICompatClient(cfg *config.ProviderConfig, systemPrompt string) (*openaiCompatClient, error) {
@@ -46,6 +47,7 @@ func newOpenAICompatClient(cfg *config.ProviderConfig, systemPrompt string) (*op
 		client:       client,
 		model:        cfg.Model,
 		systemPrompt: systemPrompt,
+		thinking:     cfg.Thinking,
 	}, nil
 }
 
@@ -91,6 +93,14 @@ func (c *openaiCompatClient) Stream(ctx context.Context, conv *conversation.Mana
 		}
 		if len(tools) > 0 {
 			reqParams.Tools = tools
+		}
+		// 火山方舟/DeepSeek 等 openai-compat 供应商用非标准顶层字段 thinking
+		// 控制深度思考开关（{"type":"enabled"}），SDK 未建模，通过 ExtraFields 透传。
+		// 思考内容经 delta.reasoning_content 回传（下方已解析）。
+		if c.thinking {
+			reqParams.SetExtraFields(map[string]any{
+				"thinking": map[string]any{"type": "enabled"},
+			})
 		}
 
 		stream := c.client.Chat.Completions.NewStreaming(ctx, reqParams)
@@ -165,8 +175,14 @@ func (c *openaiCompatClient) Stream(ctx context.Context, conv *conversation.Mana
 				}
 
 				// DeepSeek/小米等 provider 在 Chat Completions delta 中用非标准字段
-				// reasoning_content 传输思考内容，SDK 未直接建模，从 ExtraFields 提取。
-				if rc, ok := delta.JSON.ExtraFields["reasoning_content"]; ok && rc.Valid() {
+				// reasoning_content（或 reasoning）传输思考内容。SDK 把未知字段收进
+				// ExtraFields，此时 Field.status==invalid（Valid()==false），Raw()
+				// 才是判断依据：非空原始 JSON 即存在，直接按 JSON string 解码。
+				for _, field := range []string{"reasoning_content", "reasoning"} {
+					rc, ok := delta.JSON.ExtraFields[field]
+					if !ok {
+						continue
+					}
 					raw := rc.Raw()
 					if len(raw) >= 2 && raw[0] == '"' {
 						var text string

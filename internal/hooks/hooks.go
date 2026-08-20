@@ -428,7 +428,13 @@ func runCommand(h Hook, ctx HookContext) HookResult {
 	execCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(execCtx, "bash", "-c", h.Action.Command)
+	hookShell, hookShellIsPosix := resolveHookShell()
+	var cmd *exec.Cmd
+	if hookShellIsPosix {
+		cmd = exec.CommandContext(execCtx, hookShell, "-c", h.Action.Command)
+	} else {
+		cmd = exec.CommandContext(execCtx, hookShell, "/c", h.Action.Command)
+	}
 	cmd.Env = append(cmd.Environ(),
 		"MEWCODE_EVENT="+string(ctx.EventName),
 		"MEWCODE_TOOL="+ctx.ToolName,
