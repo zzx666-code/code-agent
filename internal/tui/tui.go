@@ -3610,9 +3610,9 @@ func (m Model) renderChatView() string {
 }
 
 func (m Model) renderBanner() string {
-	cat := bannerStyle.Render(` /\_/\    `) + bannerDimStyle.Render("MewCode v0.1.0") + "\n" +
-		bannerStyle.Render(`( o.o )   `) + bannerDimStyle.Render(m.getModelName()) + "\n" +
-		bannerStyle.Render(` > ^ <    `) + bannerDimStyle.Render(m.getWorkDir())
+	cat := bannerStyle.Render(`  ʕ•ᴥ•ʔ `) + bannerDimStyle.Render(" Bear v0.2.1") + "\n" +
+		bannerStyle.Render(` /|   |\ `) + bannerDimStyle.Render(m.getModelName()) + "\n" +
+		bannerStyle.Render(`  |___|  `) + bannerDimStyle.Render(m.getWorkDir())
 	return cat
 }
 
