@@ -220,7 +220,10 @@ func (c *openaiCompatClient) Stream(ctx context.Context, conv *conversation.Mana
 					for _, acc := range toolCalls {
 						var args map[string]any
 						if acc.argsJSON != "" {
-							json.Unmarshal([]byte(acc.argsJSON), &args)
+							if err := json.Unmarshal([]byte(acc.argsJSON), &args); err != nil {
+								errs <- &InvalidToolArgumentsError{ToolName: acc.name, Message: fmt.Sprintf("invalid arguments for tool %q: %v", acc.name, err)}
+								return
+							}
 						}
 						if args == nil {
 							args = map[string]any{}

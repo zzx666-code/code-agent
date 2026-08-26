@@ -110,6 +110,9 @@ func TestClassifyErrorStatus(t *testing.T) {
 		{&RateLimitError{Message: "slow down"}, "ratelimit"},
 		{&NetworkError{Message: "timeout"}, "network"},
 		{&ContextTooLongError{Message: "too long"}, "context"},
+		{&ProtocolError{Message: "malformed response"}, "protocol"},
+		{&InvalidToolArgumentsError{ToolName: "ReadFile", Message: "bad args"}, "tool_args"},
+		{&ServiceUnavailableError{Message: "upstream unavailable"}, "unavailable"},
 		{&LLMError{Message: "500"}, "server"},
 		{nil, "unknown"},
 	}

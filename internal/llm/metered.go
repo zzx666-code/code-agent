@@ -117,6 +117,18 @@ func ClassifyErrorStatus(err error) string {
 	if errors.As(err, &ctxErr) {
 		return "context"
 	}
+	var protocolErr *ProtocolError
+	if errors.As(err, &protocolErr) {
+		return "protocol"
+	}
+	var argsErr *InvalidToolArgumentsError
+	if errors.As(err, &argsErr) {
+		return "tool_args"
+	}
+	var unavailableErr *ServiceUnavailableError
+	if errors.As(err, &unavailableErr) {
+		return "unavailable"
+	}
 	var llmErr *LLMError
 	if errors.As(err, &llmErr) {
 		return "server"

@@ -181,7 +181,10 @@ func (c *openaiClient) Stream(ctx context.Context, conv *conversation.Manager, t
 			case "response.function_call_arguments.done":
 				var args map[string]any
 				if jsonAccum != "" {
-					json.Unmarshal([]byte(jsonAccum), &args)
+					if err := json.Unmarshal([]byte(jsonAccum), &args); err != nil {
+						errs <- &InvalidToolArgumentsError{ToolName: currentToolName, Message: fmt.Sprintf("invalid arguments for tool %q: %v", currentToolName, err)}
+						return
+					}
 				}
 				if args == nil {
 					args = map[string]any{}
@@ -282,6 +285,9 @@ func classifyOpenAIError(err error) error {
 		if apiErr.StatusCode == 413 || (apiErr.StatusCode == 400 && containsContextLengthError(apiErr.Error())) {
 			return &ContextTooLongError{Message: fmt.Sprintf("Context too long: %s", apiErr.Error())}
 		}
+		if apiErr.StatusCode == 400 && containsInvalidToolArgumentsError(apiErr.Error()) {
+			return &InvalidToolArgumentsError{Message: fmt.Sprintf("Invalid tool arguments: %s", apiErr.Error())}
+		}
 		switch apiErr.StatusCode {
 		case 401:
 			return &AuthenticationError{Message: fmt.Sprintf("Invalid API key: %s", apiErr.Error())}
@@ -298,6 +304,9 @@ func classifyOpenAIError(err error) error {
 			}
 			return &RateLimitError{Message: msg, RetryAfter: retry}
 		default:
+			if apiErr.StatusCode >= 500 {
+				return &ServiceUnavailableError{Message: fmt.Sprintf("Service unavailable (%d): %s", apiErr.StatusCode, apiErr.Error())}
+			}
 			return &LLMError{Message: fmt.Sprintf("API error (%d): %s", apiErr.StatusCode, apiErr.Error())}
 		}
 	}
@@ -309,4 +318,10 @@ func containsContextLengthError(msg string) bool {
 	return strings.Contains(lower, "context_length_exceeded") ||
 		strings.Contains(lower, "maximum context length") ||
 		strings.Contains(lower, "prompt is too long")
+}
+
+func containsInvalidToolArgumentsError(msg string) bool {
+	lower := strings.ToLower(msg)
+	return strings.Contains(lower, "tool call") || strings.Contains(lower, "function call") ||
+		strings.Contains(lower, "tool arguments") || strings.Contains(lower, "function arguments")
 }

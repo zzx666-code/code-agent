@@ -274,7 +274,10 @@ func (c *anthropicClient) Stream(ctx context.Context, conv *conversation.Manager
 				if currentToolName != "" {
 					var args map[string]any
 					if jsonAccum != "" {
-						json.Unmarshal([]byte(jsonAccum), &args)
+						if err := json.Unmarshal([]byte(jsonAccum), &args); err != nil {
+							errs <- &InvalidToolArgumentsError{ToolName: currentToolName, Message: fmt.Sprintf("invalid arguments for tool %q: %v", currentToolName, err)}
+							return
+						}
 					}
 					if args == nil {
 						args = map[string]any{}
@@ -412,6 +415,9 @@ func classifyAnthropicError(err error) error {
 		if apiErr.StatusCode == 413 || strings.Contains(apiErr.Error(), "prompt is too long") {
 			return &ContextTooLongError{Message: fmt.Sprintf("Context too long: %s", apiErr.Error())}
 		}
+		if apiErr.StatusCode == 400 && containsInvalidToolArgumentsError(apiErr.Error()) {
+			return &InvalidToolArgumentsError{Message: fmt.Sprintf("Invalid tool arguments: %s", apiErr.Error())}
+		}
 		switch apiErr.Type() {
 		case anthropic.ErrorTypeAuthenticationError:
 			return &AuthenticationError{Message: fmt.Sprintf("Invalid API key: %s", apiErr.Error())}
@@ -428,6 +434,9 @@ func classifyAnthropicError(err error) error {
 			}
 			return &RateLimitError{Message: msg, RetryAfter: retry}
 		default:
+			if apiErr.StatusCode >= 500 {
+				return &ServiceUnavailableError{Message: fmt.Sprintf("Service unavailable (%d): %s", apiErr.StatusCode, apiErr.Error())}
+			}
 			return &LLMError{Message: fmt.Sprintf("API error (%d): %s", apiErr.StatusCode, apiErr.Error())}
 		}
 	}

@@ -27,6 +27,7 @@ const (
 	maxTokensCeiling          = 64000
 	maxOutputTokensRecoveries = 3
 	maxVerifyRetries          = 2
+	maxStreamRecoveryRetries  = 3
 )
 
 type TraceObserver interface {
@@ -221,6 +222,7 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 		consecutiveUnknown := 0
 		maxTokensEscalated := false
 		outputRecoveries := 0
+		streamRecoveryAttempts := 0
 		// usageAnchor pins the last real API usage to the conversation length at
 		// the moment it was reported, so the compaction check can use
 		// baseline + incremental estimate instead of estimating every message.
@@ -362,7 +364,8 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 			select {
 			case err := <-errs:
 				if err != nil {
-					if retry, compacted := a.handleStreamError(ctx, ch, conv, err); retry {
+					if retry, compacted := a.handleStreamErrorWithAttempt(ctx, ch, conv, err, streamRecoveryAttempts); retry {
+						streamRecoveryAttempts++
 						if compacted {
 							// ForceCompact rewrote the conversation; the prior
 							// anchor's AnchorCount no longer maps to it. Drop it
@@ -380,6 +383,7 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 					return
 				}
 			default:
+				streamRecoveryAttempts = 0
 			}
 
 			totalInput += usage.InputTokens
@@ -661,6 +665,13 @@ func (a *Agent) shouldVerify(conv *conversation.Manager) bool {
 // conversation, so the caller must drop its usage anchor (its AnchorCount no
 // longer maps to the new transcript).
 func (a *Agent) handleStreamError(ctx context.Context, ch chan AgentEvent, conv *conversation.Manager, err error) (retry, compacted bool) {
+	return a.handleStreamErrorWithAttempt(ctx, ch, conv, err, 0)
+}
+
+func (a *Agent) handleStreamErrorWithAttempt(ctx context.Context, ch chan AgentEvent, conv *conversation.Manager, err error, attempt int) (retry, compacted bool) {
+	if ctx.Err() != nil {
+		return false, false
+	}
 	var ctxErr *llm.ContextTooLongError
 	if errors.As(err, &ctxErr) {
 		compactStart := time.Now()
@@ -677,18 +688,40 @@ func (a *Agent) handleStreamError(ctx context.Context, ch chan AgentEvent, conv 
 	}
 
 	var rlErr *llm.RateLimitError
-	if errors.As(err, &rlErr) {
-		wait := parseRetryAfter(rlErr.RetryAfter)
-		ch <- RetryEvent{Reason: "rate limited", Wait: wait}
-		select {
-		case <-time.After(wait):
-			return true, false
-		case <-ctx.Done():
-			return false, false
-		}
+	_ = errors.As(err, &rlErr)
+	kind := recovery.Kind(err)
+	if !recovery.ShouldRetry(kind, attempt, maxStreamRecoveryRetries) {
+		return false, false
 	}
-
-	return false, false
+	retryAfter := ""
+	if rlErr != nil {
+		retryAfter = rlErr.RetryAfter
+	}
+	wait := recovery.Delay(kind, attempt, retryAfter, 250*time.Millisecond, 8*time.Second)
+	reason := "transient model error"
+	switch kind {
+	case recovery.KindRateLimit:
+		reason = "rate limited"
+	case recovery.KindProtocol:
+		reason = "malformed model response"
+		conv.AddSystemReminder("The previous model response had invalid tool-call formatting. Retry with valid JSON arguments and continue the task.")
+	case recovery.KindToolArgs:
+		reason = "invalid tool arguments"
+		conv.AddSystemReminder("The previous tool arguments were invalid. Retry the tool call with arguments matching its schema.")
+	case recovery.KindNetwork:
+		reason = "network error"
+	case recovery.KindUnavailable:
+		reason = "service unavailable"
+	}
+	ch <- RetryEvent{Reason: fmt.Sprintf("%s (attempt %d/%d)", reason, attempt+1, maxStreamRecoveryRetries), Wait: wait}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true, false
+	case <-ctx.Done():
+		return false, false
+	}
 }
 
 func parseRetryAfter(header string) time.Duration {
