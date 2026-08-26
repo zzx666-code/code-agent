@@ -3834,12 +3834,7 @@ func (m Model) renderChatContent() string {
 		hint := lipgloss.NewStyle().Foreground(dimText).Render("  (ctrl+t to hide)")
 		sb.WriteString("\n")
 		sb.WriteString("  " + header + hint + "\n")
-		lines := strings.Split(m.thinkingBuf, "\n")
-		start := 0
-		if len(lines) > 30 {
-			start = len(lines) - 30
-		}
-		shown := strings.Join(lines[start:], "\n")
+		shown := m.thinkingBuf
 		indented := indentBlock(shown, "  ")
 		sb.WriteString(lipgloss.NewStyle().Foreground(dimText).Render(strings.TrimRight(indented, " \n")))
 		sb.WriteString("\n")
