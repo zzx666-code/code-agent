@@ -217,6 +217,7 @@ func CreateDefaultToolsWithWorkDir(workDir string) DefaultTools {
 	reg.Register(&BashTool{WorkDir: workDir})
 	reg.Register(&GlobTool{})
 	reg.Register(&GrepTool{})
+	reg.Register(&SymbolSearchTool{Root: workDir})
 	return DefaultTools{Registry: reg, WriteFile: wf, EditFile: ef}
 }
 
