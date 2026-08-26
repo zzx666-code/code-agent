@@ -829,6 +829,11 @@ func extractFilePath(args map[string]any) string {
 }
 
 func (a *Agent) executeSingleTool(ctx context.Context, eventCh chan AgentEvent, tc llm.ToolCallComplete) (result toolExecResult) {
+	if tc.Arguments == nil {
+		tc.Arguments = map[string]any{}
+	}
+	result.toolID = tc.ToolID
+	result.toolName = tc.ToolName
 	tool := a.Registry.Get(tc.ToolName)
 	start := time.Now()
 	rejectedReason := ""
@@ -855,6 +860,12 @@ func (a *Agent) executeSingleTool(ctx context.Context, eventCh chan AgentEvent, 
 		a.met().RecordToolCall(tc.ToolName, "ok")
 		a.met().ObserveToolLatency(tc.ToolName, elapsed)
 		recordCodingMetrics(a, tc.ToolName, tc.Arguments, result.output)
+	}()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			result.output = fmt.Sprintf("Error: tool %q panicked: %v", tc.ToolName, recovered)
+			result.isError = true
+		}
 	}()
 
 	if tool == nil {

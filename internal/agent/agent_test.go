@@ -83,6 +83,16 @@ type mockTool struct {
 	result string
 }
 
+type panicTool struct{}
+
+func (t *panicTool) Name() string                 { return "PanicTool" }
+func (t *panicTool) Description() string          { return "panics" }
+func (t *panicTool) Category() tools.ToolCategory { return tools.CategoryRead }
+func (t *panicTool) Schema() map[string]any {
+	return map[string]any{"name": t.Name(), "description": t.Description(), "input_schema": map[string]any{"type": "object"}}
+}
+func (t *panicTool) Execute(context.Context, map[string]any) tools.ToolResult { panic("boom") }
+
 func (t *mockTool) Name() string        { return t.name }
 func (t *mockTool) Description() string { return "mock tool" }
 
@@ -131,6 +141,37 @@ func getToolResults(events []AgentEvent) []ToolResultEvent {
 		}
 	}
 	return results
+}
+
+func TestStreamErrorRecoveryIsBounded(t *testing.T) {
+	ag := New(&mockClient{}, tools.NewRegistry(), "anthropic")
+	conv := conversation.NewManager()
+	ch := make(chan AgentEvent, 4)
+	if retry, _ := ag.handleStreamErrorWithAttempt(context.Background(), ch, conv, &llm.NetworkError{Message: "temporary"}, 0); !retry {
+		t.Fatal("network errors should be retried")
+	}
+	if retry, _ := ag.handleStreamErrorWithAttempt(context.Background(), ch, conv, &llm.NetworkError{Message: "temporary"}, maxStreamRecoveryRetries); retry {
+		t.Fatal("retry budget must be bounded")
+	}
+}
+
+func TestStreamErrorRecoveryStopsOnCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ag := New(&mockClient{}, tools.NewRegistry(), "anthropic")
+	if retry, _ := ag.handleStreamErrorWithAttempt(ctx, make(chan AgentEvent, 1), conversation.NewManager(), &llm.NetworkError{Message: "temporary"}, 0); retry {
+		t.Fatal("cancelled contexts must not retry")
+	}
+}
+
+func TestToolPanicBecomesToolError(t *testing.T) {
+	reg := tools.NewRegistry()
+	reg.Register(&panicTool{})
+	ag := New(&mockClient{}, reg, "anthropic")
+	result := ag.executeSingleTool(context.Background(), make(chan AgentEvent, 1), llm.ToolCallComplete{ToolID: "p1", ToolName: "PanicTool"})
+	if !result.isError || result.toolID != "p1" || !strings.Contains(result.output, "panicked") {
+		t.Fatalf("panic result = %+v", result)
+	}
 }
 
 func buildSkillSystemPrompt(skillsDir string, catalog *skills.Catalog) string {
