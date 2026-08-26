@@ -772,12 +772,12 @@ func (m *Model) registerAgentTools(client llm.Client, providerCfg *config.Provid
 
 	m.memoryMgr = memory.NewManager(wd)
 
-	ragStore, ragEmbedder, ragReranker, ragErr := tools.NewRAGStore(wd, providerCfg)
+	ragStore, ragEmbedder, ragReranker, ragOcr, ragErr := tools.NewRAGStore(wd, providerCfg)
 	if ragErr == nil {
 		m.ragStore = ragStore
 		m.ragEmbedder = ragEmbedder
 		m.ragReranker = ragReranker
-		m.registry.Register(&tools.RagIndexTool{Store: ragStore, Embedder: ragEmbedder})
+		m.registry.Register(&tools.RagIndexTool{Store: ragStore, Embedder: ragEmbedder, Ocr: ragOcr})
 		m.registry.Register(&tools.RagSearchTool{Store: ragStore, Embedder: ragEmbedder, Reranker: ragReranker, Client: client, FinalTopK: 5})
 		m.registry.Register(&tools.RagClearTool{Store: ragStore})
 	}

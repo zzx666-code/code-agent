@@ -44,6 +44,9 @@ type ProviderConfig struct {
 	RerankModel     string `yaml:"rerank_model"`
 	RerankURL       string `yaml:"rerank_url"`
 	RerankAPIKey    string `yaml:"rerank_api_key"`
+	VisionModel     string `yaml:"vision_model"`
+	VisionURL       string `yaml:"vision_url"`
+	VisionAPIKey    string `yaml:"vision_api_key"`
 
 	// fetchedContextWindow caches the max_input_tokens auto-pulled from the
 	// provider's /v1/models endpoint (layer 2 of GetContextWindow). Populated
@@ -160,6 +163,22 @@ func (p *ProviderConfig) ResolveEmbeddingAPIKey() string {
 func (p *ProviderConfig) ResolveRerankAPIKey() string {
 	if p.RerankAPIKey != "" {
 		return p.RerankAPIKey
+	}
+	if p.APIKey != "" {
+		return p.APIKey
+	}
+	envVar := envKeyMap[p.Protocol]
+	if envVar == "" {
+		return ""
+	}
+	return os.Getenv(envVar)
+}
+
+// ResolveVisionAPIKey returns the API key for vision (OCR) calls.
+// Priority: vision_api_key > api_key (shared) > env var inferred from protocol.
+func (p *ProviderConfig) ResolveVisionAPIKey() string {
+	if p.VisionAPIKey != "" {
+		return p.VisionAPIKey
 	}
 	if p.APIKey != "" {
 		return p.APIKey

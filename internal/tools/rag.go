@@ -15,6 +15,7 @@ import (
 type RagIndexTool struct {
 	Store    *rag.Store
 	Embedder *rag.Embedder
+	Ocr      *rag.OcrClient
 }
 
 func (t *RagIndexTool) Name() string           { return "RagIndex" }
@@ -67,7 +68,7 @@ func (t *RagIndexTool) ExecuteWithProgress(ctx context.Context, args map[string]
 	if progress != nil {
 		progress(fmt.Sprintf("正在扫描并切分文件: %s", absPath))
 	}
-	chunks, err := rag.ChunkPath(absPath)
+	chunks, err := rag.ChunkPathWithContext(ctx, absPath, t.Ocr)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Error chunking: %s", err), IsError: true}
 	}
@@ -116,6 +117,9 @@ func (t *RagIndexTool) ExecuteWithProgress(ctx context.Context, args map[string]
 	sb.WriteString(fmt.Sprintf("已索引 %d 个 chunk，来自 %d 个文件\n", len(chunks), len(fileSet)))
 	for fp := range fileSet {
 		sb.WriteString("  - " + fp + "\n")
+	}
+	if report := t.Ocr.Report(); report != "" {
+		sb.WriteString(report + "\n")
 	}
 	return ToolResult{Output: sb.String()}
 }
@@ -344,18 +348,18 @@ func (t *RagClearTool) Execute(ctx context.Context, args map[string]any) ToolRes
 	return ToolResult{Output: "索引已清空"}
 }
 
-func NewRAGStore(baseDir string, providerCfg *config.ProviderConfig) (*rag.Store, *rag.Embedder, *rag.Reranker, error) {
+func NewRAGStore(baseDir string, providerCfg *config.ProviderConfig) (*rag.Store, *rag.Embedder, *rag.Reranker, *rag.OcrClient, error) {
 	store, err := rag.NewStore(baseDir)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	if providerCfg == nil || providerCfg.EmbeddingModel == "" {
-		return store, nil, nil, nil
+		return store, nil, nil, nil, nil
 	}
 	embedder, err := rag.NewEmbedder(providerCfg)
 	if err != nil {
 		store.Close()
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	var reranker *rag.Reranker
 	if providerCfg.RerankModel != "" {
@@ -368,5 +372,11 @@ func NewRAGStore(baseDir string, providerCfg *config.ProviderConfig) (*rag.Store
 			}
 		}
 	}
-	return store, embedder, reranker, nil
+	var ocr *rag.OcrClient
+	if res := rag.NewOcrClient(providerCfg); res.Err != nil {
+		ocr = nil
+	} else {
+		ocr = res.Client
+	}
+	return store, embedder, reranker, ocr, nil
 }

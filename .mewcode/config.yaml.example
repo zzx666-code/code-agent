@@ -23,8 +23,11 @@ providers:
   #   embedding_url: https://ark.cn-beijing.volces.com/api/plan/v3  # 可选，默认同 base_url
   #   embedding_api_key: "your-embedding-api-key"    # 可选，默认复用 api_key
   #   rerank_model: BAAI/bge-reranker-v2-m3          # RAG rerank 模型（cross-encoder 精排，可选）
-  #   rerank_url: https://api.siliconflow.cn/v1      # 可选，可按模型前缀自动推断（BAAI/ 等 → SiliconFlow，rerank- → Voyage）
+  #   rerank_url: https://api.siliconflow.cn/v1      # 可选，可按模型前缀自动推断（BAAI/ 等 -> SiliconFlow，rerank- -> Voyage）
   #   rerank_api_key: "your-rerank-api-key"          # 可选，默认复用 api_key
+  #   vision_model: doubao-seed-2.0-lite             # PDF 图片/表格 OCR（视觉理解模型，可选；未配置则 PDF 只提取文本层）
+  #   vision_url: https://ark.cn-beijing.volces.com/api/plan/v3   # 可选，默认同 base_url
+  #   vision_api_key: "your-vision-api-key"          # 可选，默认复用 api_key
 
 permission_mode: default
 
