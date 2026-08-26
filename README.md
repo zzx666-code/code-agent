@@ -228,6 +228,12 @@ mcp_servers:
 
 MewCode 内置 Prometheus 指标采集和 Grafana 可视化，覆盖 6 个层级共 63 个指标：
 
+![Grafana Dashboard 1](docs/images/1.png)
+
+![Grafana Dashboard 2](docs/images/2.png)
+
+![Grafana Dashboard 3](docs/images/3.png)
+
 | 层级 | 指标 | 说明 |
 |---|---|---|
 | **请求层** | `agent_requests_total` `agent_active_tasks` `agent_task_duration_seconds` | 请求计数、活跃任务、任务耗时 |
