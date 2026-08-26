@@ -108,3 +108,14 @@ func BuildPlanModeExitReminder(planFilePath string, planExists bool) string {
 	}
 	return fmt.Sprintf(planModeExitReminder, extra)
 }
+
+// BuildExecutionModeReminder communicates the automatic execution strategy
+// selected for a resumable task without changing permission semantics. The
+// model can therefore use a lightweight ReAct loop for focused work and a
+// checklist-driven plan for multi-step changes.
+func BuildExecutionModeReminder(mode string) string {
+	if mode == "plan_and_execute" {
+		return "Automatic execution mode: Plan-and-Execute. Break the task into explicit checkpoints, execute them in dependency order, and verify each checkpoint before continuing."
+	}
+	return "Automatic execution mode: ReAct. Iterate by observing tool results, taking the next smallest action, and verifying the result before proceeding."
+}

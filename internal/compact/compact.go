@@ -14,12 +14,31 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"mewcode/internal/conversation"
 	"mewcode/internal/llm"
 	"mewcode/internal/session"
 )
+
+var compactionStatsPattern = regexp.MustCompile(`Compacted:\s*(\d+)\s*→\s*(\d+) estimated tokens`)
+
+// ParseCompactionStats extracts the token accounting emitted by compaction.
+// It returns ok=false for a no-op or provider-specific message.
+func ParseCompactionStats(message string) (before, after int, ok bool) {
+	m := compactionStatsPattern.FindStringSubmatch(message)
+	if len(m) != 3 {
+		return 0, 0, false
+	}
+	if _, err := fmt.Sscanf(m[1], "%d", &before); err != nil {
+		return 0, 0, false
+	}
+	if _, err := fmt.Sscanf(m[2], "%d", &after); err != nil {
+		return 0, 0, false
+	}
+	return before, after, true
+}
 
 const (
 	// maxPTLRetries limits how many times we retry the summary request after

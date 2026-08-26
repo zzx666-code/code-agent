@@ -48,6 +48,26 @@ type RecoveryState struct {
 	skills map[string]SkillInvocationRecord
 }
 
+// Keys returns the names of snapshots that can be restored after compaction.
+// It is intentionally a small, stable view for task-state persistence and
+// metrics; callers cannot mutate the internal maps.
+func (s *RecoveryState) Keys() []string {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keys := make([]string, 0, len(s.files)+len(s.skills))
+	for path := range s.files {
+		keys = append(keys, "file:"+path)
+	}
+	for name := range s.skills {
+		keys = append(keys, "skill:"+name)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 // NewRecoveryState returns an empty state ready for recording.
 func NewRecoveryState() *RecoveryState {
 	return &RecoveryState{

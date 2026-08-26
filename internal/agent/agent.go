@@ -19,6 +19,8 @@ import (
 	"mewcode/internal/permissions"
 	"mewcode/internal/planfile"
 	"mewcode/internal/prompt"
+	"mewcode/internal/recovery"
+	"mewcode/internal/taskstate"
 	"mewcode/internal/toolresult"
 	"mewcode/internal/tools"
 )
@@ -95,6 +97,7 @@ type Agent struct {
 	// has ended.
 	TraceObserver TraceObserver
 	Metrics       *metrics.Metrics
+	TaskState     *taskstate.State
 	eventCh       chan AgentEvent
 	// activeSkills tracks which Skill SOPs have been activated in this session (name → body).
 	// Used by /skills to show what's active and by RecoveryState to survive compaction.
@@ -161,6 +164,51 @@ func New(client llm.Client, registry *tools.Registry, protocol string) *Agent {
 // constructed (and again after a resume switches sessions).
 func (a *Agent) SetSessionID(id string) { a.SessionID = id }
 
+func (a *Agent) ensureTaskState(conv *conversation.Manager) {
+	if a.TaskState != nil || a.SessionID == "" {
+		return
+	}
+	if existing, err := taskstate.Load(a.WorkDir, a.SessionID); err == nil {
+		a.TaskState = existing
+		return
+	}
+	task := ""
+	for _, msg := range conv.GetMessages() {
+		if msg.Role == "user" && msg.Content != "" {
+			task = msg.Content
+			break
+		}
+	}
+	a.TaskState = taskstate.New(a.SessionID, task)
+}
+
+func (a *Agent) persistTaskState() {
+	if a.TaskState != nil && a.SessionID != "" {
+		_ = taskstate.Save(a.WorkDir, a.TaskState)
+	}
+}
+
+func (a *Agent) failTaskState(reason string) {
+	if a.TaskState != nil {
+		a.TaskState.Fail(reason)
+		a.persistTaskState()
+	}
+}
+
+func (a *Agent) pauseTaskState(reason string) {
+	if a.TaskState != nil {
+		a.TaskState.Pause(reason)
+		a.persistTaskState()
+	}
+}
+
+func (a *Agent) completeTaskState() {
+	if a.TaskState != nil {
+		a.TaskState.Complete()
+		a.persistTaskState()
+	}
+}
+
 func (a *Agent) met() *metrics.Metrics {
 	if a.Metrics == nil {
 		return metrics.Noop
@@ -201,6 +249,11 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 		}()
 
 		a.emitHook(hooks.EventSessionStart, "", nil)
+		a.ensureTaskState(conv)
+		if a.TaskState != nil {
+			a.TaskState.Start()
+			a.persistTaskState()
+		}
 		a.met().IncActiveSessions()
 		a.met().IncActiveTasks()
 		taskStart := time.Now()
@@ -231,8 +284,13 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 
 		for iteration := 1; ; iteration++ {
 			turnStart := time.Now()
+			if a.TaskState != nil {
+				a.TaskState.SetCheckpoint(iteration, "turn")
+				a.persistTaskState()
+			}
 			a.met().RecordStep()
 			if a.MaxIterations > 0 && iteration > a.MaxIterations {
+				a.failTaskState("maximum iterations reached")
 				a.met().ObserveTurnsPerRun(iteration - 1)
 				a.met().RecordAgentRun("max_iterations")
 				a.met().RecordMaxStepsReached()
@@ -242,6 +300,7 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 			}
 
 			if ctx.Err() != nil {
+				a.pauseTaskState("context cancelled")
 				a.met().ObserveTurnsPerRun(iteration - 1)
 				a.met().RecordAgentRun("cancelled")
 				a.met().RecordTaskTimeout()
@@ -256,6 +315,9 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 			toolSchemas := a.currentToolSchemas()
 
 			// Plan mode: inject structured workflow reminder.
+			if a.TaskState != nil && iteration == 1 {
+				conv.AddSystemReminder(prompt.BuildExecutionModeReminder(string(a.TaskState.Mode)))
+			}
 			if a.Checker != nil && a.Checker.Mode == permissions.ModePlan {
 				planPath := planfile.GetOrCreatePlanPath(a.WorkDir)
 				a.Checker.PlanFilePath = planPath
@@ -295,6 +357,14 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				a.met().RecordCompaction("success")
 				a.met().ObserveCompactionLatency(time.Since(compactStart))
 				ch <- CompactEvent{Message: msg}
+				if a.TaskState != nil {
+					if before, after, ok := compact.ParseCompactionStats(msg); ok {
+						a.TaskState.BeforeTokens = before
+						a.TaskState.AfterTokens = after
+						a.TaskState.MemoryKeys = a.RecoveryState.Keys()
+						a.persistTaskState()
+					}
+				}
 				usageAnchor = compact.UsageAnchor{}
 				conv.InjectLongTermMemory(a.Instructions, a.MemoryContent)
 				// 压缩后 conv 已变，重新应用 Layer 1 budget
@@ -376,6 +446,7 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 						continue // retry the turn
 					}
 					ch <- ErrorEvent{Message: err.Error()}
+					a.failTaskState(err.Error())
 					a.met().RecordError(llm.ClassifyErrorStatus(err))
 					a.met().ObserveTurnsPerRun(iteration)
 					a.met().RecordAgentRun("error")
@@ -479,9 +550,11 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				a.met().ObserveTurnLatency(time.Since(turnStart))
 				a.met().ObserveTurnsPerRun(iteration)
 				if verified {
+					a.completeTaskState()
 					a.met().RecordAgentRun("success")
 					a.met().RecordRequest("success")
 				} else {
+					a.failTaskState("verification failed")
 					a.met().RecordAgentRun("unverified")
 					a.met().RecordRequest("unverified")
 				}
@@ -541,6 +614,7 @@ func (a *Agent) Run(ctx context.Context, conv *conversation.Manager) <-chan Agen
 				a.met().RecordAgentRun("terminated")
 				a.met().RecordRequest("terminated")
 				ch <- ErrorEvent{Message: "Too many consecutive unknown tool calls"}
+				a.failTaskState("too many consecutive unknown tool calls")
 				return
 			}
 
